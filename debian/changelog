@@ -1,0 +1,140 @@
+libadwaita-1 (1.2.2-1) unstable; urgency=medium
+
+  * New upstream release
+  * debian/gbp.conf, debian/control.in: Branch for bookworm
+
+ -- Jeremy Bicha <jbicha@ubuntu.com>  Mon, 13 Feb 2023 10:12:10 -0500
+
+libadwaita-1 (1.2.1-2) unstable; urgency=medium
+
+  * debian/tests/build-test: Set GTK_A11Y=none
+  * debian/control.in: Bump Standards-Version to 4.6.2
+
+ -- Jeremy Bicha <jbicha@ubuntu.com>  Thu, 12 Jan 2023 14:21:14 -0500
+
+libadwaita-1 (1.2.1-1) unstable; urgency=medium
+
+  * New upstream release
+
+ -- Jeremy Bicha <jbicha@ubuntu.com>  Mon, 09 Jan 2023 14:18:28 -0500
+
+libadwaita-1 (1.2.0-1) unstable; urgency=medium
+
+  * New upstream release
+
+ -- Jeremy Bicha <jbicha@ubuntu.com>  Thu, 15 Sep 2022 13:05:06 -0400
+
+libadwaita-1 (1.2~rc-1) unstable; urgency=medium
+
+  * New upstream release
+  * debian/watch: Only watch for stable releases
+
+ -- Jeremy Bicha <jbicha@ubuntu.com>  Tue, 06 Sep 2022 14:59:46 -0400
+
+libadwaita-1 (1.2~beta-1) unstable; urgency=medium
+
+  * New upstream release
+  * debian/libadwaita-1.0.symbols: Add new symbols
+
+ -- Jeremy Bicha <jbicha@ubuntu.com>  Fri, 05 Aug 2022 18:21:01 -0400
+
+libadwaita-1 (1.2~alpha-1) unstable; urgency=medium
+
+  * New upstream release
+  * debian/libadwaita-1-0.symbols: Add new symbols
+
+ -- Jeremy Bicha <jbicha@ubuntu.com>  Thu, 14 Jul 2022 16:07:50 +0200
+
+libadwaita-1 (1.1.3-1) unstable; urgency=medium
+
+  * New upstream release
+
+ -- Jeremy Bicha <jbicha@ubuntu.com>  Thu, 14 Jul 2022 14:48:22 +0200
+
+libadwaita-1 (1.1.2-1) unstable; urgency=medium
+
+  * Team upload
+
+  [ Nathan Pratta Teodosio ]
+  * New upstream release
+
+  [ Jeremy Bicha ]
+  * Mark autopkgtests as superficial
+
+ -- Nathan Pratta Teodosio <nathan.teodosio@canonical.com>  Fri, 03 Jun 2022 11:05:32 -0300
+
+libadwaita-1 (1.1.1-1) unstable; urgency=medium
+
+  [ Jeremy Bicha ]
+  * New upstream release (LP: #1970758)
+
+  [ Marco Trevisan (Treviño) ]
+  * debian/control: Add libxml2-utils as B-D to get xmllint
+
+ -- Jeremy Bicha <jbicha@ubuntu.com>  Thu, 28 Apr 2022 10:14:08 -0400
+
+libadwaita-1 (1.1.0-1) unstable; urgency=medium
+
+  * New upstream release
+
+ -- Jeremy Bicha <jbicha@ubuntu.com>  Fri, 18 Mar 2022 11:31:38 -0400
+
+libadwaita-1 (1.1~rc-1) unstable; urgency=medium
+
+  * New upstream release
+
+ -- Jeremy Bicha <jeremy.bicha@canonical.com>  Tue, 08 Mar 2022 11:13:40 -0500
+
+libadwaita-1 (1.1~beta-1) unstable; urgency=medium
+
+  * New upstream release
+  * deiban/libadwaita-1-0.symbols: Add new symbols
+
+ -- Jeremy Bicha <jeremy.bicha@canonical.com>  Tue, 22 Feb 2022 10:20:48 -0500
+
+libadwaita-1 (1.0.2-2) unstable; urgency=medium
+
+  * Build-Depend on gi-docgen
+  * Add libadwaita-1-doc package
+
+ -- Jeremy Bicha <jeremy.bicha@canonical.com>  Fri, 11 Feb 2022 09:32:39 -0500
+
+libadwaita-1 (1.0.2-1) unstable; urgency=medium
+
+  * New upstream release
+
+ -- Jeremy Bicha <jeremy.bicha@canonical.com>  Fri, 11 Feb 2022 09:25:25 -0500
+
+libadwaita-1 (1.0.1-2) unstable; urgency=medium
+
+  * debian/libadwaita-1.0.symbols: Add Build-Depends-Package
+  * Bump Standards-Version to 4.6.0
+  * Release to unstable
+
+ -- Jeremy Bicha <jeremy.bicha@canonical.com>  Thu, 10 Feb 2022 05:57:19 -0500
+
+libadwaita-1 (1.0.1-1) experimental; urgency=medium
+
+  * Team upload
+
+  [ Jeremy Bicha ]
+  * Update packaging for Debian GNOME team style
+
+  [ Guido Günther ]
+  * Fix LGPL license text
+
+  [ Simon McVittie ]
+  * New upstream release
+  * d/control: Update build-dependencies
+  * d/copyright: Update
+  * Install supporting files for the example
+  * Update symbols file, ignoring ABI breaks between alpha and final release
+  * d/tests/python-gi-test: Stop using a class that was removed
+
+ -- Simon McVittie <smcv@debian.org>  Tue, 04 Jan 2022 21:35:38 +0000
+
+libadwaita-1 (1.0.0~alpha.2-1) experimental; urgency=medium
+
+  * Initial upload to experimental (Closes: #993598)
+
+ -- Guido Günther <agx@sigxcpu.org>  Fri, 03 Sep 2021 16:25:01 +0200
