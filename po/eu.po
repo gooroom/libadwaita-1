@@ -1,0 +1,458 @@
+# Basque translation for libhandy.
+# Copyright (C) 2020 libhandy's COPYRIGHT HOLDER
+# This file is distributed under the same license as the libhandy package.
+# Asier Sarasua Garmendia <asiersarasua@ni.eus>, 2020, 2021, 2022.
+#
+msgid ""
+msgstr "Project-Id-Version: libhandy master\n"
+"Report-Msgid-Bugs-To: https://gitlab.gnome.org/GNOME/libadwaita/issues\n"
+"POT-Creation-Date: 2022-08-05 19:13+0000\n"
+"PO-Revision-Date: 2022-07-08 10:00+0100\n"
+"Last-Translator: Asier Sarasua Garmendia <asier.sarasua@ni.eus>\n"
+"Language-Team: Basque <librezale@librezale.eus>\n"
+"Language: eu\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: src/adw-about-window.c:203
+msgid "GNU General Public License, version 2 or later"
+msgstr "GNUren Lizentzia Publiko Orokorra, 2 bertsioa edo berriagoa"
+
+#: src/adw-about-window.c:204
+msgid "GNU General Public License, version 3 or later"
+msgstr "GNUren Lizentzia Publiko Orokorra, 3 bertsioa edo berriagoa"
+
+#: src/adw-about-window.c:205
+msgid "GNU Lesser General Public License, version 2.1 or later"
+msgstr "GNU Hedadura Txikiagoko Lizentzia Publiko Orokorra, 2.1. bertsioa edo berriagoa"
+
+#: src/adw-about-window.c:206
+msgid "GNU Lesser General Public License, version 3 or later"
+msgstr "GNU Hedadura Txikiagoko Lizentzia Publiko Orokorra, 3. bertsioa edo berriagoa"
+
+#: src/adw-about-window.c:207
+msgid "BSD 2-Clause License"
+msgstr "BSD 2-klausula Lizentzia"
+
+#: src/adw-about-window.c:208
+msgid "The MIT License (MIT)"
+msgstr "MIT Lizentzia (MIT)"
+
+#: src/adw-about-window.c:209
+msgid "Artistic License 2.0"
+msgstr "Lizentzia Artistikoa 2.0"
+
+#: src/adw-about-window.c:210
+msgid "GNU General Public License, version 2 only"
+msgstr "GNUren Lizentzia Publiko Orokorra, 2. bertsioa soilik"
+
+#: src/adw-about-window.c:211
+msgid "GNU General Public License, version 3 only"
+msgstr "GNUren Lizentzia Publiko Orokorra, 3. bertsioa soilik"
+
+#: src/adw-about-window.c:212
+msgid "GNU Lesser General Public License, version 2.1 only"
+msgstr "GNU Hedadura Txikiagoko Lizentzia Publiko Orokorra, 2.1. bertsioa soilik"
+
+#: src/adw-about-window.c:213
+msgid "GNU Lesser General Public License, version 3 only"
+msgstr "GNU Hedadura Txikiagoko Lizentzia Publiko Orokorra, 3. bertsioa soilik"
+
+#: src/adw-about-window.c:214
+msgid "GNU Affero General Public License, version 3 or later"
+msgstr "GNUren Affero Lizentzia Publiko Orokorra, 3 bertsioa edo berriagoa"
+
+#: src/adw-about-window.c:215
+msgid "GNU Affero General Public License, version 3 only"
+msgstr "GNUren Affero Lizentzia Publiko Orokorra, 3. bertsioa soilik"
+
+#: src/adw-about-window.c:216
+msgid "BSD 3-Clause License"
+msgstr "BSD 3-klausula Lizentzia"
+
+#: src/adw-about-window.c:217
+msgid "Apache License, Version 2.0"
+msgstr "Apache lizentzia, 2.0 bertsioa"
+
+#: src/adw-about-window.c:218
+msgid "Mozilla Public License 2.0"
+msgstr "Mozillaren lizentzia publikoa 2.0"
+
+#: src/adw-about-window.c:526
+msgid "Code by"
+msgstr "Kodea:"
+
+#: src/adw-about-window.c:527
+msgid "Design by"
+msgstr "Diseinua:"
+
+#: src/adw-about-window.c:528
+msgid "Artwork by"
+msgstr "Artelana:"
+
+#: src/adw-about-window.c:529
+msgid "Documentation by"
+msgstr "Dokumentazioa:"
+
+#: src/adw-about-window.c:530
+msgid "Translated by"
+msgstr "Itzulpena:"
+
+#. Translators: this is the license preamble; the string at the end
+#. * contains the name of the license as link text.
+#.
+#: src/adw-about-window.c:559
+#, c-format
+msgid ""
+"This application comes with absolutely no warranty. See the <a href=\"%s\">"
+"%s</a> for details."
+msgstr "Aplikazio honek ez du inolako bermerik. Xehetasun gehiagorako, ikusi <a href=\"%s\">%s</a>."
+
+#: src/adw-about-window.c:637
+msgid "This Application"
+msgstr "Aplikazio hau"
+
+#: src/adw-about-window.c:939
+#, c-format
+msgid "Version %s"
+msgstr "%s bertsioa"
+
+#: src/adw-about-window.c:965
+msgid "Unable to parse release notes:"
+msgstr "Ezin dira argitalpen-oharrak analizatu:"
+
+#: src/adw-about-window.c:971
+#, c-format
+msgid "Line: %d, character: %d"
+msgstr "Lerroa: %d, karakterea: %d"
+
+#: src/adw-about-window.c:1264
+msgid "Copied to clipboard"
+msgstr "Arbelean kopiatu da"
+
+#: src/adw-about-window.c:1299
+msgid "Unable to save debugging information"
+msgstr "Ezin da arazketa-informazioa gorde"
+
+#: src/adw-about-window.c:1304
+msgid "Close"
+msgstr "Itxi"
+
+#: src/adw-about-window.c:1322
+msgid "Save debugging information"
+msgstr "Gorde arazketa-informazioa"
+
+#: src/adw-about-window.c:1325
+msgid "_Save"
+msgstr "_Gorde"
+
+#: src/adw-about-window.c:1326
+msgid "_Cancel"
+msgstr "_Utzi"
+
+#: src/adw-about-window.ui:5
+msgid "About"
+msgstr "Honi buruz"
+
+#: src/adw-about-window.ui:123
+msgid "_What’s New"
+msgstr "_Zer berri"
+
+#: src/adw-about-window.ui:138
+msgid "_Details"
+msgstr "_Xehetasunak"
+
+#: src/adw-about-window.ui:153 src/adw-about-window.ui:395
+msgid "_Website"
+msgstr "_Webgunea"
+
+#: src/adw-about-window.ui:176
+msgid "_Support Questions"
+msgstr "_Laguntza-galderak"
+
+#: src/adw-about-window.ui:192
+msgid "_Report an Issue"
+msgstr "_Jakinarazi akatsa"
+
+#: src/adw-about-window.ui:207
+msgid "_Troubleshooting"
+msgstr "_Arazoen ebazpena"
+
+#: src/adw-about-window.ui:226
+msgid "_Credits"
+msgstr "_Kredituak"
+
+#: src/adw-about-window.ui:241
+msgid "_Legal"
+msgstr "_Legea"
+
+#: src/adw-about-window.ui:256
+msgid "_Acknowledgements"
+msgstr "A_itortzak"
+
+#: src/adw-about-window.ui:295
+msgid "What’s New"
+msgstr "Zer berri"
+
+#: src/adw-about-window.ui:300 src/adw-about-window.ui:356
+#: src/adw-about-window.ui:437 src/adw-about-window.ui:512
+#: src/adw-about-window.ui:559 src/adw-about-window.ui:606
+#: src/adw-about-window.ui:653
+msgid "Back"
+msgstr "Atzera"
+
+#: src/adw-about-window.ui:351
+msgid "Details"
+msgstr "Xehetasunak"
+
+#: src/adw-about-window.ui:432
+msgid "Troubleshooting"
+msgstr "Arazoen ebazpena"
+
+#: src/adw-about-window.ui:461
+msgid ""
+"To assist in troubleshooting, you can view your debugging information. "
+"Providing this information to the application developers can help diagnose "
+"any problems you encounter when you report an issue."
+msgstr "Arazoak ebazten laguntzeko, arazketa-informazioa begiratu dezakezu. Informazio hori aplikazioaren garatzaileei ematen badiezu, aurkitutako edozein arazoren diagnostikoa egiten lagundu dezakezu."
+
+#: src/adw-about-window.ui:472
+msgid "_Debugging Information"
+msgstr "_Arazketa-informazioa"
+
+#: src/adw-about-window.ui:507
+msgid "Credits"
+msgstr "Kredituak"
+
+#: src/adw-about-window.ui:554
+msgid "Legal"
+msgstr "Legea"
+
+#: src/adw-about-window.ui:601
+msgid "Acknowledgements"
+msgstr "Aitortzak"
+
+#: src/adw-about-window.ui:648
+msgid "Debugging Information"
+msgstr "Arazketa-informazioa"
+
+#: src/adw-about-window.ui:696
+msgid "_Copy Text"
+msgstr "_Kopiatu testua"
+
+#: src/adw-about-window.ui:703
+msgid "_Save as…"
+msgstr "Gorde _honela…"
+
+#: src/adw-entry-row.ui:93
+msgid "Apply"
+msgstr "Aplikatu"
+
+#: src/adw-inspector-page.c:76
+msgid "No Preference"
+msgstr "Hobespenik ez"
+
+#: src/adw-inspector-page.c:78
+msgid "Prefer Dark"
+msgstr "Hobeto iluna"
+
+#: src/adw-inspector-page.c:80
+msgid "Prefer Light"
+msgstr "Hobeto argia"
+
+#. Translators: The name of the library, not the stylesheet
+#: src/adw-inspector-page.c:98
+msgid "Adwaita"
+msgstr "Adwaita"
+
+#: src/adw-inspector-page.ui:10
+msgid "System Appearance"
+msgstr "Sistemaren itxura"
+
+#: src/adw-inspector-page.ui:11
+msgid ""
+"Override settings for this application. They will be reset upon closing the "
+"inspector."
+msgstr "Gainidatzi aplikazio honek ezarpenak. Ikuskatzailea itxi ondoren berrezarriko dira."
+
+#: src/adw-inspector-page.ui:14
+msgid "System Supports Color Schemes"
+msgstr "Sistemak kolore-eskemak onartzen ditu"
+
+#: src/adw-inspector-page.ui:26
+msgid "Preferred Color Scheme"
+msgstr "Hobetsitako kolore-eskema"
+
+#: src/adw-inspector-page.ui:43
+msgid "High Contrast"
+msgstr "Kontraste handia"
+
+#: src/adw-password-entry-row.c:71
+msgid "Hide Text"
+msgstr "Ezkutatu testua"
+
+#: src/adw-password-entry-row.c:75
+msgid "Show Text"
+msgstr "Erakutsi testua"
+
+#: src/adw-password-entry-row.c:169
+msgid "Caps Lock is on"
+msgstr "Maiuskulen blokeoaren tekla aktibatuta dago"
+
+#: src/adw-password-entry-row.c:177
+msgid "_Show Text"
+msgstr "_Erakutsi testua"
+
+#: src/adw-preferences-window.c:242
+msgid "Untitled page"
+msgstr "Izenbururik gabeko orrialdea"
+
+#: src/adw-preferences-window.ui:8
+msgid "Preferences"
+msgstr "Hobespenak"
+
+#: src/adw-preferences-window.ui:69
+msgid "Search"
+msgstr "Bilatu"
+
+#: src/adw-preferences-window.ui:139
+msgid "No Results Found"
+msgstr "Ez da emaitzarik aurkitu"
+
+#: src/adw-preferences-window.ui:140
+msgid "Try a different search."
+msgstr "Saiatu bestelako bilaketa batekin."
+
+#: src/adw-tab.ui:88
+msgid "Close Tab"
+msgstr "Itxi fitxa"
+
+#~ msgid "This property does not apply when a custom title is set"
+#~ msgstr ""
+#~ "Propietatea ez da aplikatzen titulu pertsonalizatua ezarrita dagoenean"
+
+#~ msgid ""
+#~ "The decoration layout does not apply to header bars which do no show "
+#~ "window controls"
+#~ msgstr ""
+#~ "Dekorazioaren diseinua ez zaie aplikatzen leiho-kontrolak erakusten ez "
+#~ "dituzten goiburu-barrei"
+
+#~ msgid "Icon name"
+#~ msgstr "Ikono-izena"
+
+#~ msgid "Activatable widget"
+#~ msgstr "Trepeta aktibagarria"
+
+#~ msgid "The widget to be activated when the row is activated"
+#~ msgstr "Errenkada aktibatzen denean aktibatuko den trepeta"
+
+#~ msgid "Subtitle"
+#~ msgstr "Azpititulua"
+
+#~ msgid "Use underline"
+#~ msgstr "Erabili azpimarra"
+
+#~ msgid "Number of pages"
+#~ msgstr "Orrialde kopurua"
+
+#~ msgid "Position"
+#~ msgstr "Kokalekua"
+
+#~ msgid "Spacing"
+#~ msgstr "Tartea"
+
+#~ msgid "Spacing between pages"
+#~ msgstr "Orrien arteko tartea"
+
+#~ msgid "Interactive"
+#~ msgstr "Interaktiboa"
+
+#~ msgid "Animation duration"
+#~ msgstr "Animazioaren iraupena"
+
+#~ msgid "Default animation duration"
+#~ msgstr "Animazio lehenetsiaren iraupena"
+
+#~ msgid "Maximum size"
+#~ msgstr "Gehieneko tamaina"
+
+#~ msgid "Selected index"
+#~ msgstr "Hautatutako indizea"
+
+#~ msgid "The index of the selected item"
+#~ msgstr "Hautatutako elementuaren indizea"
+
+#~ msgid "Use subtitle"
+#~ msgstr "Erabili azpititulua"
+
+#~ msgid "Visible child"
+#~ msgstr "Haur ikusgaia"
+
+#~ msgid "Name"
+#~ msgstr "Izena"
+
+#~ msgid "The name of the child page"
+#~ msgstr "Orri haurraren izena"
+
+#~ msgid "The subtitle for this row"
+#~ msgstr "Errenkada honen azpititulua"
+
+#~ msgid "Expanded"
+#~ msgstr "Hedatuta"
+
+#~ msgid "Whether the row is expanded"
+#~ msgstr "Errenkada hedatuta dagoen ala ez"
+
+#~ msgid "Enable expansion"
+#~ msgstr "Gaitu hedatzea"
+
+#~ msgid "Whether the expansion is enabled"
+#~ msgstr "Hedatzea gaituta dagoen ala ez"
+
+#~ msgid "Minimize"
+#~ msgstr "Minimizatu"
+
+#~ msgid "Restore"
+#~ msgstr "Leheneratu"
+
+#~ msgid "Maximize"
+#~ msgstr "Maximizatu"
+
+#~ msgid "Pack type"
+#~ msgstr "Pakete mota"
+
+#~ msgid "Title"
+#~ msgstr "Titulua"
+
+#~ msgid "The title to display"
+#~ msgstr "Bistaratuko den titulua"
+
+#~ msgid "The subtitle to display"
+#~ msgstr "Bistaratuko den azpititulua"
+
+#~ msgid "Custom Title"
+#~ msgstr "Titulu pertsonalizatua"
+
+#~ msgid "Search Mode Enabled"
+#~ msgstr "Bilaketa-modua gaituta"
+
+#~ msgid "Whether the search mode is on and the search bar shown"
+#~ msgstr ""
+#~ "Bilaketa-modua gaituta dagoen eta bilaketa-barra bistan dagoen ala ez"
+
+#~ msgid "Show Close Button"
+#~ msgstr "Erakutsi 'Itxi' botoia"
+
+#~ msgid "Whether to show the close button in the toolbar"
+#~ msgstr "Tresna-barran 'Itxi' botoia erakutsiko den ala ez"
+
+#~ msgid "Widget"
+#~ msgstr "Trepeta"
+
+#~ msgid "Homogeneous"
+#~ msgstr "Homogeneoa"
+
+#~ msgid "Homogeneous sizing"
+#~ msgstr "Tamaina homogeneoa"

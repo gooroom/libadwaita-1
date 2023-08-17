@@ -1,0 +1,77 @@
+include:
+  - project: 'gnome/citemplates'
+    file: 'flatpak/flatpak_ci_initiative.yml'
+
+variables:
+  APP_ID: 'org.gnome.Adwaita1.Demo'
+  BUNDLE: 'org.gnome.Adwaita1.Demo.flatpak'
+  RUNTIME_REPO: 'https://nightly.gnome.org/gnome-nightly.flatpakrepo'
+  MANIFEST_PATH: 'demo/org.gnome.Adwaita1.Demo.json'
+  FLATPAK_MODULE: 'libadwaita'
+  FLATPAK_BUILD_DIR: build
+  ABI_CHECKER_IMAGE: "registry.gitlab.gnome.org/gnome/libadwaita/abi-checker:v2"
+  DOCS_IMAGE: "registry.gitlab.gnome.org/gnome/libadwaita/docs:v2"
+
+stages:
+  - build
+  - publish
+  - deploy
+
+api-visibility:
+  stage: build
+  before_script: []
+  script:
+    - ./.gitlab-ci/api-visibility.sh
+
+doc:
+  image: $DOCS_IMAGE
+  stage: build
+  tags:
+    - flatpak
+  variables:
+    MESON_ARGS: >-
+      -Dgtk_doc=true
+      -Dtests=false
+      -Dvapi=false
+  script:
+    - meson --prefix=/app ${MESON_ARGS} _build
+    - ninja -C _build
+    - mv _build/doc/libadwaita-1 _doc/
+  artifacts:
+    paths:
+      - _doc
+
+build-flatpak:
+  extends: '.flatpak@x86_64'
+  stage: build
+  before_script: []
+
+build-flatpak-aarch64:
+  extends: '.flatpak@aarch64'
+  stage: build
+  before_script: []
+
+abi-check:
+  image: $ABI_CHECKER_IMAGE
+  stage: build
+  variables:
+    LAST_ABI_BREAK: "11849510ba90790093ae130a3e46033b1f908e57"
+  script:
+    - ./.gitlab-ci/check-abi ${LAST_ABI_BREAK} $(git rev-parse HEAD)
+
+refresh-doc:
+  image: fedora
+  stage: publish
+  only:
+    refs:
+    - 'main'
+  script:
+    - "curl -X POST -F token=${PAGES_TRIGGER_TOKEN} -F ref=pages https://gitlab.gnome.org/api/v4/projects/14079/trigger/pipeline"
+
+nightly:
+  extends: '.publish_nightly'
+  needs: ['build-flatpak']
+
+nightly-aarch64:
+  extends: '.publish_nightly'
+  needs: ['build-flatpak-aarch64']

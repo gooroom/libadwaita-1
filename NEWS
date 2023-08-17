@@ -1,0 +1,834 @@
+=============
+Version 1.2.2
+=============
+
+- AboutWindow
+  - Prevent double clicks from opening troubleshooting page
+- AdwLeaflet
+  - Fix can-unfold=false
+- AdwSpringAnimation
+  - Fix critical damping velocity
+- AdwSwipeable
+  - Fix get_swipe_area() fallback
+- AdwToastOverlay
+  - Don't focus buttons on click
+  - Prevent toast labels from wrapping
+- Demo
+  - Fix the switch on the avatar page
+- Stylesheet
+  - Fix GtkLevelBar fill colors
+- Fix dependency names in docs
+- Translation updates
+  - French
+
+=============
+Version 1.2.1
+=============
+
+- AdwActionRow
+  - Fix spacing after removing all prefixes/suffixes
+- AdwAvatar
+  - Correctly redraw on custom image changes
+- AdwEntryRow
+  - Respect use-markup property
+  - Fix error/warning/success styles
+  - Fix spacing after removing all prefixes/suffixes
+- AdwExpanderRow
+  - Fix spacing after removing all prefixes/suffixes
+- AdwFlap
+  - Fix natural width with fold-policy=never
+- AdwMessageDialog
+  - Fix focus styles in RTL
+- AdwPreferencesWindow
+  - Fix a memory leak
+- AdwSplitButton
+  - Don't make dropdown insensitive when the button is
+- AdwTabBar
+  - Fix focus handling
+  - Fix autoscroll for non-local drags
+- AdwToastOverlay
+  - Clarify documentation
+- AdwViewSwitcherBar
+  - Fix typos in examples
+- AdwViewSwitcherTitle
+  - Fix typos in examples
+- Stylesheet
+  - Fix GtkSpinButton inside toolbars
+- Translation updates
+  - Abkhazian
+  - British English
+  - Croatian
+  - Friulian
+  - German
+  - Greek
+  - Hebrew
+  - Indonesian
+  - Persian
+  - Slovak
+  - Turkish
+
+=============
+Version 1.2.0
+=============
+
+- Docs
+  - Fix @card_shade_color description
+  - Fix a typo in AdwTabView docs
+  - Fix AdwMessageDialog example
+- Translation updates
+  - Bulgarian
+  - Croatian
+  - Czech
+  - German
+  - Hungarian
+  - Occitan
+  - Slovenian
+
+==============
+Version 1.2.rc
+==============
+
+- Ensure setter documentation is consistent with their properties
+- Demo
+  - Fix a critical when toggling tab indicators
+- AdwCarousel
+  - Fix a crash when removing a child while it's animating
+- AdwMessageDialog
+  - Use maximum width when no parent is set, instead of minimum
+- AdwSqueezer
+  - Sizing fixes
+- AdwTabBar
+  - Fix long press handling
+  - Fix a crash when clicking empty space while a tab is animating
+- AdwTabView
+  - Fix set_menu_model() input check
+- AdwWindow
+  - Clarify docs around child/content properties
+- Stylesheet
+  - Fix AdwSplitButton disabled state
+  - Fix focus transitions
+  - Fix GtkColorScale slider
+  - Fix AdwViewSwitcher needs-attention dot color
+- Translation updates
+  - Abkhazian
+  - Basque
+  - Brazilian Portuguese
+  - Catalan
+  - Chinese (China)
+  - Croatian
+  - Danish
+  - Dutch
+  - Finnish
+  - Galician
+  - Georgian
+  - Indonesian
+  - Korean
+  - Persian
+  - Polish
+  - Serbian
+  - Spanish
+  - Swedish
+  - Turkish
+
+================
+Version 1.2.beta
+================
+
+- Fix deprecations with newer GLib
+- Fix strict aliasing warnings
+- Fix GLSL shader compile errors on certain systems
+- AdwAboutWindow
+  - Fix a random crash when closing
+  - Rework the flat header bar layout
+  - Properly mark as final class
+- AdwAvatar
+  - Fix draw_to_texture() with rectangular avatars
+- AdwEntryRow
+  - Add entry-activated signal
+  - Add attributes property
+  - Add activates-default property
+  - Don't select text when clicking the row
+- AdwMessageDialog
+  - Fix crash when destroying the parent before the dialog
+- AdwShadowHelper
+  - Fix warnings when drawing vertical shadow
+- AdwSplitButton
+  - Add dropdown-tooltip property
+- AdwSwipeTracker
+  - Fix swipe speed on GTK 4.7.x
+  - Fix criticals with GTK 4.7.x
+- AdwTabBar
+  - Remove tab background when there's only one tab
+  - Add a tooltip for close buttons
+  - Fix squished or clipped text with gtk-hint-font-metrics=0
+  - Fix scrolling to a tab with disabled animations
+  - Fix assorted tab reordering issues
+- AdwTabView
+  - Add shortcut management API
+  - Add AdwTabPage:indicator-tooltip property
+  - Handle shortcuts on CAPTURE phase
+  - Shortcut propagation and bell fixes
+- AdwToast
+  - Add button-clicked signal
+- AdwViewStack
+  - Add adw_view_stack_add_titled_with_icon()
+- Demo
+  - Prefer properties over <child> in UI files
+  - Don't explicilty add GtkViewport to GtkScrolledWindow
+  - Stop using .inline-toolbar
+  - Fix build on Windows
+- Stylesheet
+  - Unify @view_fg_color with other foreground colors
+  - Improve contrast of @success_color and @warning_color
+  - Fix infobar margins and spacing
+  - Partially support .navigation-sidebar with GtkTreeView
+  - Move GtkScale focus onto its slider
+  - Ensure consistant GtkScale size when using marks
+  - Remove unnecessary transitions
+- Translation updates
+  - Abkhazian
+  - Basque
+  - Catalan
+  - Galician
+  - Georgian
+  - Hebrew
+  - Indonesian
+  - Lithuanian
+  - Occitan
+  - Portuguese
+  - Russian
+  - Turkish
+  - Ukrainian
+
+=================
+Version 1.2.alpha
+=================
+
+- Introduce AdwAboutWindow
+- Introduce AdwEntryRow and AdwPasswordEntryRow
+- Introduce AdwMessageDialog
+- Introduce AdwPropertyAnimationTarget
+- AdwAnimation
+  - Add adw_animation_set_target()
+- AdwCallbackAnimationTarget
+  - Fix callback annotations
+- AdwActionRow
+  - Set a11y relations for the activatable widget
+  - Tweak spacing to match toolbars and AdwEntryRow
+- AdwAvatar
+  - Fix initials not updating after setting custom-image
+- AdwComboRow
+  - Add an example to docs
+- AdwExpanderRow
+  - Change arrow orientation to make it look less similar
+    to action rows that open subpages
+- AdwLeaflet
+  - Fix child sizing with fold-threshold-policy=natural
+  - Clip child during transitions, preventing glitchy header bar borders
+  - Check direction argument in navigate()
+  - Fix a broken link in docs
+- AdwPreferencesGroup
+  - Fix accessibility labels
+  - Annotation fixes
+- AdwPreferencesRow
+  - Add use-markup property
+  - Annotation fixes
+- AdwSplitButton
+  - Avoid state changes during dispose
+- AdwStyleManager
+  - Fix high contrast setting name when using a portal
+  - Correctly handle removing a GdkDisplay
+  - Add environment variables to control styles from Builder
+- AdwSwipeTracker
+  - Fix a memory leak
+- AdwTabBar
+  - Ensure indicators are clickable with inverted=true
+  - Fix resize deferring with non-expanded tabs
+  - Fix scroll animation stopping too early
+  - Fix middle click when inside GtkWindowHandle
+  - Refresh style
+    - Use a button-like style for tabs, ensure visibility in dark variant
+    - Add spacing between and around tabs and action widgets
+    - Use real widgets for separators instead of borders
+    - Replace shade gradients with opacity fading
+    - Replace needs-attention glow with a line
+    - Add backdrop style matching header bars
+    - Use :selected state for selected tab instead of :checked
+- AdwToast
+  - Add custom-title property
+  - Add adw_toast_new_format()
+  - Allow dismiss() to be called multiple times
+  - Fix the example in docs
+- AdwToastOverlay
+  - Allow add_toast() to be called multiple times to extend the timeout
+  - Make toasts without button narrower
+- AdwViewSwitcherTitle
+  - Clear pending idle callback on unrealize
+- Stylesheet
+  - Deprecate the .large-title style class
+  - Add @dialog_bg_color and @dialog_fg_color for AdwMessageDialog
+  - Add backdrop styles for GtkSearchBar and GtkActionBar
+  - Update GtkColorScale style, following GTK
+  - Add missing borders in high contrast version
+  - Style GtkActionBar like header bars and similar widgets
+  - Use shade colors as borders for header bars and similar widgets
+  - Use shade colors as boxed list rows borders
+  - Remove border from leaflet/flap transition shadow
+  - Slightly tone down window outline
+  - Dim GtkPlacesSidebar unmount buttons to match icons
+  - Ensure active states consistently work with touchscreens
+  - Make GtkComboBox and GtkDropDown less likely to stretch vertically
+  - Fix GtkDropDown visual glitch when pressed on touchscreen
+  - Fix progressbar.osd overriding text color
+  - Fix action row title and subtitle inside GtkHeaderBar
+- Docs
+  - Mention AdwComboRow:selected type in migration guide
+  - Update *_shade color descriptions
+  - Make screenshot tool buildable with MSVC
+  - Disable animations before taking screenshots
+- Remove property nicks and blurbs
+- Make property flags consistent
+- Fix symbols added in 1.1 being erroneously marked as 1.0
+- Fix a Meson error when using as a subproject
+- Various internal changes and cleanups
+Translation updates:
+  - Basque
+  - Brazilian Portuguese
+  - British English
+  - Bulgarian
+  - Catalan
+  - Chinese (China)
+  - Chinese (Taiwan)
+  - Dutch
+  - French
+  - Galician
+  - Georgian
+  - German
+  - Hebrew
+  - Lithuanian
+  - Nepali
+  - Persian
+  - Portuguese
+  - Russian
+  - Spanish
+  - Swedish
+  - Turkish
+  - Ukrainian
+
+=============
+Version 1.1.0
+=============
+
+- Fix introspection-related build warnings
+- Translation updates:
+  - Finnish
+  - Hungarian
+  - Italian
+  - Kazakh
+  - Serbian
+
+==============
+Version 1.1.rc
+==============
+
+- AdwAvatar
+  - Fix invalid UTF-8 handling
+- AdwStyleManager
+  - Follow color-scheme on macOS
+  - Don't disable non-CSS animations during style changes
+- AdwToast
+  - Fix GVariant handling
+- Stylesheet
+  - Fix scrollbars inside .osd widgets
+- Fix carousel indicator sizing
+- Memory leak fixes
+- Translation updates:
+  - Czech
+  - Croatian
+  - Danish
+  - German
+  - Japanese
+  - Korean
+  - Slovak
+  - Turkish
+
+================
+Version 1.1.beta
+================
+
+- Fix building with MSVC
+- AdwActionRow
+  - Don't make activatable if the activatable widget is insensitive
+- AdwClamp
+  - Fix measure() with height-for-width children
+- AdwComboRow
+  - Fix end padding when the dropdown arrow is hidden
+- AdwExpanderRow
+  - Fix focus handling
+- AdwPreferencesGroup
+  - Add support for header suffixes
+- AdwPreferencesRow
+  - Add 'title-selectable' property
+- Demo
+  - Fix combo rows in AdwCarousel demo
+  - Remove the "Frobnicate" button
+- Docs
+  - Fix AdwViewSwitcherBar and AdwViewStack examples
+  - Fix typos
+  - Better wording for @self parameters
+- Stylesheet
+  - Fix radio hover state in GtkPopoverMenu
+  - Don't draw textview background 2 times
+- Translation updates:
+  - Abkhazian
+  - French
+  - Indonesian
+  - Occitan
+  - Persian
+  - Vietnamese
+
+=============
+Version 1.0.1
+=============
+
+- Include pre-built stylesheet and docs into release tarballs
+
+=============
+Version 1.0.0
+=============
+
+- Rework GtkInspector page to not require a module, remove -Dinspector
+- Accessibility fixes in action row, flap, leaflet, preferences group,
+  preferences page, status page, view switcher, window
+- Animation
+  - Properly mark AdwAnimation as abstract
+  - Make ADW_DURATION_INFINITE introspectable
+- Carousel
+  - Fix reorder(), prepend() and insert() behavior
+- Clamp Layout
+  - Fix measure() behavior
+- Demo
+  - Split every page into separate files
+  - Remove .app-notification demo
+  - Fix the animation skip button sensitivity
+  - Fix capitalization
+  - Various cleanups
+- Add a hello world example
+- Documentation
+  - Add a screenshot generator, update all screenshots
+  - Add widget screenshots
+  - Update build instructions
+  - Update visual index
+  - New pages:
+    - Initialization
+    - Adaptive Layouts
+    - Boxed Lists
+    - Styles and Appearance
+    - Named Colors
+    - Style Classes
+  - Various small updates
+- Leaflet
+  - Fix property notification ordering when starting a swipe
+- Stylesheet
+  - Improve emoji chooser styles
+  - Add hover style to .activatable GtkGridView children
+  - Fix menu checks
+  - Fix @warning_fg_color to be legible against @warning_bg_color
+- Tab Bar
+  - Fix various layout warnings
+- Tab View
+  - Implement adding pages from ui files
+  - Propagate Alt-[0-9] if selected tab doesn't change
+- Toast Overlay
+  - Implement adding toasts from ui files
+- Translation updates:
+  - Basque
+  - Brazilian Portuguese
+  - Chinese (China)
+  - Friulian
+  - Galician
+  - Hebrew
+  - Lithuanian
+  - Polish
+  - Portuguese
+  - Romanian
+  - Russian
+  - Slovenian
+  - Spanish
+
+====================
+Version 1.0.0.beta.1
+====================
+
+- Build
+  - Depend on GTK 4.5.0.
+  - Depend on GLib 2.66.
+  - Fix building as a subproject.
+  - Remove unused dependencies.
+- Introduce AdwToastOverlay for showing in-app notifications
+- Introduce AdwAnimation - a basic animation API
+  - AdwTimedAnimation provides simple time-based animations.
+  - AdwSpringAnimation provides flexible animations based on spring
+    physics.
+  - Replace adw_ease_out_cubic() with adw_easing_ease().
+  - Make adw_lerp() public.
+- adw_init() now automatically calls gtk_init().
+- Use G_DEFINE_FINAL_TYPE if available.
+- Action Row
+  - Increase spacing between title and subtitle.
+- Carousel
+  - Use spring animations for scrolling, replace animation-duration with
+    scroll-params.
+  - Remove adw_carousel_scroll_to_full(), add 'animate' parameter to
+    adw_carousel_scroll_to() instead.
+- Flap
+  - Use spring animations for reveal, replace reveal-duration with
+    reveal-params.
+- Leaflet
+  - Rename can-swipe-back/forward to can-navigate-back/forward, make
+    them handle mouse back/forward buttons, back/forward keys, as well
+    as Alt+arrow shortcuts.
+  - Make child transitions use spring animations, replace
+    child-transition-duration with child-transition-params.
+- Preferences Page
+  - Remove adaptive margins - they never worked properly.
+- Preferences Window
+  - Rename can-swipe-back to can-navigate-back, following the equivalent
+    AdwLeaflet change.
+  - Add API to show toasts.
+- Swipe Tracker
+  - Move 'begin-swipe' signal to when the swipe actually starts instead
+    of when it's detected; add 'prepare' to replace it.
+  - Replace duration with velocity in the 'end-swipe' signal.
+- Status Page
+  - Update title label style.
+- Style Manager
+  - Set GtkSettings:gtk-application-prefer-dark-theme=true for dark.
+  - Properly reset enable-animations.
+- Stylesheet
+  - New style classes
+    - entry.success to match entry.warning and entry.error
+    - Generic .success to match .warning and .error.
+    - checkbutton.selection-mode
+  - Tweak accent color in dark variant, use accent_color/accent_bg_color
+    more consistently.
+  - Consistently support regular/bg/fg variants for success, warning
+    and error colors.
+  - Make menu items taller.
+  - Make checked buttons more visible.
+  - Update entry style.
+  - Update GtkTreeView and GtkColumnView header style.
+  - Tweak check button style.
+  - Update window and popover shadows.
+  - Make boxed lists use shadows as well.
+  - Use white accent color for .osd.
+  - Use tabular figures for GtkCalendar.
+  - Support .navigation-sidebar in combination with .background.
+  - Remove the GtkButton .outline class.
+  - Remove .content-view check buttons.
+  - Fix check hover styles in menus.
+- Tab Bar
+  - Fix needs-attention indicators.
+- Tab View
+  - Remove shortcut-widget, use managed shortcuts instead.
+- View Stack
+  - Layout fixes
+  - Remove crossfade transition.
+- View Switcher
+  - Update styles.
+  - Fix measure() criticals.
+  - Fix a crash when hiding the visible child.
+  - Fix outlines in high contrast mode.
+- View Switcher Title:
+  - Always hide switcher in mobile.
+- Various fixes and cleanups.
+- Translation updates:
+  - Russian
+  - Spanish
+  - Swedish
+  - Ukrainian
+
+=====================
+Version 1.0.0.alpha.4
+=====================
+
+- Depend on meson 0.59.0.
+- Action Row
+  - Drop use-underline property.
+  - Stop supporting mnemonics on subtitles.
+  - Support markup on the title and subtitle.
+  - Fix layout with empty title and subtitle.
+  - Don't expand horizontally by default.
+  - Fix row titles inside GtkMessageDialog.
+- Avatar
+  - Crop non-square custom images to fill the avatar.
+- Carousel
+  - Fix a crash when scrolling in an empty carousel.
+- Clamp
+  - Set the proper accessible role.
+- Combo Row
+  - Fix row colors while the popover is open.
+- Demo
+  - Add a style classes demo.
+  - Add about dialog.
+  - Add an inspector item to the primary menu.
+  - Change appid to org.gnome.Adwaita1.Demo to version it.
+  - Add an icon, metainfo and desktop file.
+    - Make the desktop file visible for nightly flatpaks.
+  - Make non-unique.
+  - Tighten flatpak permissions.
+  - Various polish.
+- Expander Row
+  - Drop use-underline property.
+  - Rename adw_expander_row_add() to adw_expander_row_add_row().
+- Inspector
+  - Fix color scheme resetting when opening inspector.
+- Preferences Window:
+  - Fix a memory leak.
+- Status Page
+  - Allow setting the icon from a paintable and not just icon name.
+  - Set the proper accessible role.
+  - Reduce margins with the .compact style class.
+- Style Manager
+  - Fix styles breaking when setting gtk-application-prefer-dark-theme.
+  - Fix crash on systems with xdg-desktop-portal but no settings portal.
+  - Fix a memory leak.
+- Stylesheet
+  - New style classes:
+    - .card to have a style similar to a boxed list for a standalone
+      widget. Can be combined with .activatable to have hover and active
+      states, or can be added to GtkButton to have them automatically.
+    - button.opaque to allow custom colored buttons in the style of that
+      look like .suggested-action or .destructive-action.
+    - tabbar.inline and searchbar.inline - to opt out from using header
+      bar colors for AdwTabBar and GtkSearchBar.
+  - Boxed lists
+    - Rename .content to .boxed-list to match HIG, keep .content as an
+      alias.
+    - Stop supporting .content with GtkListView as it was broken anyway.
+    - Fix focus ring offsets.
+  - Sidebars
+    - Use the same background as the window.
+    - Make .navigation-sidebar handle background, so it's sufficient to
+      achieve the proper style.
+    - Deprecate the .sidebar style class.
+  - Buttons
+    - Stop supporting button.flat.suggested-acton and
+      button.flat.destructive-action. Special case those styles for
+      GtkMessageDialog buttons instead.
+    - Support .pill on GtkMenuButton
+    - Support .suggested-action and .destructive-action on GtkMenuButton
+      and AdwSplitButton.
+    - Use toolbar-style buttons for GtkSearchBar.
+    - Fix AdwSplitButton styles in high contrast mode.
+    - Reduce disabled flat button opacity to make them easier to tell
+      apart from the regular state.
+  - Popovers
+    - Drop popover.combo, make popover.menu handle this case instead.
+    - Unify GtkDropDown and AdwComboRow popup styles with menus.
+    - Fix a double border with menu radios in high contrast mode.
+  - Refresh UI colors.
+  - Refresh scrollbar style.
+  - Unify progress bar and level bar sizes and styles.
+  - Make checks and radios larger.
+  - Refresh border radii across the board.
+  - Refresh scroll overshoot effect.
+  - Remove notebook header background.
+  - Export all UI colors and allow overriding them.
+  - Use accent color for active drop styles.
+  - Ensure proper opacity for the high contrast mode.
+  - Simplify recoloring for GtkScale, GtkCheckButton, GtkSwitch,
+    GtkColumnView and AdwTabBar.
+  - Various toolbar button fixes.
+  - Make entry.error and .warning style icons and progress bar too.
+  - Fix disabled state on GtkScale, GtkNotebook and GtkSpinButton.
+  - Fix GtkMessageDialog paddings.
+  - Fix margins on GtkWindowControls icon.
+  - Stop removing toolbar.osd rounding in overlays.
+  - Remove a GtkGridView override specific to gtk4-icon-browser.
+- Tab Bar
+  - Fix artifacts when maximizing the window.
+  - Fix hover.
+  - Handle middle click on button release and not press.
+  - Show close button correctly when raising the window and the pointer
+    is already over a tab.
+- View Switcher
+  - Fix screen readers reading page titles 4 times.
+- Add API to allow checking libadwaita version in runtime.
+- Various fixes and cleanups.
+- Translation updates:
+  - Finnish
+  - Indonesian
+  - Occitan
+  - Persian
+  - Polish
+  - Serbian
+  - Swedish
+
+===================
+Version 1.0.0.alpha.3
+===================
+
+- Depend on GTK 4.4.0.
+- Add a GtkInspector extension for simulating different system appearance
+  settings. It can be disabled with -Dinspector=false.
+- Introduce AdwStyleManager for managing color schemes (light/dark) and
+  high contrast mode.
+  - Support the cross-platform color scheme preference in the
+    settings portal.
+- Introduce AdwApplication to handle automatic initialization and style
+  loading.
+- Add adw_is_initialized() function.
+- Add AdwSplitButton to have consistent split buttons in toolbars.
+- Add AdwButtonContent as an easy way to create buttons with an icon and
+  a label inside.
+- Remove AdwValueObject.
+- Rename AdwEnumValueObject to AdwEnumListItem.
+- Avatar:
+  - Replace adw_avatar_draw_to_pixbuf() with adw_avatar_draw_to_texture()
+    that returns a GdkTexture instead.
+    - Remove the size parameter, use the avatar's current size instead.
+- Carousel
+  - Allow to shrink carousel if children are expanded.
+- Clamp
+  - Fix measuring with for_size = -1.
+- Combo Row:
+  - Have a .combo style class.
+- Leaflet:
+  - Remove hhomogeneous-folded, hhomogeneous-unfolded, vhomogeneous-folded
+    and vhomogeneous-unfolded properties. Assume non-homogeneous layout
+    when unfolded and homogeneous when folded.
+  - Add a single homogeneous property that corresponds to folded state and
+    opposite orientation.
+  - Remove interpolate-size, assume it's set to true.
+  - Set the fold threshold policy to MINIMUM by default.
+- Preferences Group:
+  - Fix default visibility of the internal list box.
+  - Allow markup on title and description.
+- Squeezer
+  - Fix the child switch threshold in vertical orientation.
+  - Add switch-threshold-policy, matching AdwFlap and AdwLeaflet.
+  - Add allow-none property, allowing to hide the last child as well.
+- Status Page
+  - Make icon optional.
+- Tab View
+  - Fix model updates when page selection changes.
+- View Switchers:
+  - Remove AdwViewSwitcher:narrow-ellipsize.
+  - Remove the policy property from AdwViewSwitcherBar and
+    AdwViewSwitcherTitle.
+  - Remove the auto policy, applications can use two view
+    switchers and an AdwSqueezer instead.
+  - Switch to narrow layouts earlier.
+- Window and Application Window:
+  - Rename the child property to content to avoid the name clash with
+    GtkWindow:child.
+- Stylesheet:
+  - New style classes:
+    - headerbar.flat to remove headerbar's background and border.
+    - separator.spacer to create spacing in toolbars or header bars.
+    - button.pill for prominent standalone buttons, for example on status
+      pages.
+    - statuspage.compact to make AdwStatusPage suitable for contexts such
+      as sidebars.
+    - .numeric as an easy way to enable tabular figures in a label.
+  - Use flat buttons by default in header bars and action bars, matching
+    existing .toolbar.
+    - .raised style class on GtkButton, GtkMenuButton, or AdwSplitButton
+      can be used to use the regular style instead.
+  - Make window controls filled instead, leave the clickable area larger
+    than the visible buttons.
+  - Fix broken styles when .content style class is used together with
+    GtkListBox:show-separators set to true.
+  - Remove @content_view_bg and @text_view_bg colors.
+  - Remove .content-view style class.
+  - Add previously removed public colors @theme_selected_bg/fg_color and
+    the backdrop colors as compatibility aliases. Applications shouldn't
+    use them in new code regardless.
+  - Use stripes for header bars in .devel windows instead of cogs to make
+    it work better with split header bars and flat header bars.
+  - Make .osd more visible in dark variant.
+  - Make borders more visible in dark variant.
+  - Fix padding on buttons inside popovers inside header bars.
+  - Fix double focus rings on labels.
+- Implement get_request_mode() and compute_expand() where appropriate.
+- Various fixes and cleanups.
+- Translation updates:
+  - Brazilian Portuguese
+  - Czech
+  - Danish
+  - Galician
+  - Lithuanian
+  - Korean
+  - Portuguese
+  - Serbian
+  - Ukrainian
+
+=====================
+Version 1.0.0-alpha.2
+=====================
+
+- Stylesheet:
+  - Large redesign to make it flat and recolorable.
+  - Replace @theme_suggested_bg_color by @accent_bg_color and
+    @accent_color.
+  - Replace @theme_suggested_fg_color by @accent_fg_color.
+  - Add @destructive_bg_color, @destructive_fg_color and
+    @destructive_color.
+  - Add the .accent style class to give the accent color to labels.
+  - Add the palette colors in the form @hue_n, with hue being blue,
+    green, yellow, orange, red, purple, brown, light and dark, and n
+    being a darkness level from 1 to 5.
+- View Switcher:
+  - Add the AdwViewStack widget to represent views.
+  - Use AdwViewStack instead of GtkStack.
+  - Display a badge on buttons to display the pages' value from the
+    AdwViewStack:badge-number property.
+  - Keep displaying needs-attention when active.
+- Preferences Page:
+  - Add the name property.
+- Preferences Window:
+  - Add the visible-child and visible-child-name properties.
+- Leaflet and Flap:
+  - Add the AdwFoldThresholdPolicy enumeration.
+  - Add the fold-threshold-policy property to determine the size at
+     which the leaflet or flap should fold.
+- Leaflet:
+  - Fix a crash by NULL-checking a pointer before dereferencing it when
+    there is no children.
+  - Annotate the values of the visible-child and visible-child-name
+    properties as nullable in their accessors.
+- Action Row and Expander Row:
+  - Annotate the value of the icon-name property as nullable in its
+    accessors.
+- Tab View:
+  - Fix updating the model at the right time after attaching pages.
+  - Fix emitting notify::selected-page after the model has been
+    completely updated.
+  - Prevent pages from receiving pointer events during drag and drop.
+- Combo Row:
+  - Fix subtitles when the model is empty and when using expressions.
+- Carousel:
+  - Fix a crash with 2 overlapping animations.
+  - Fix a crash when scrolling when there is no children.
+- Avatar:
+  - Fix memory leaks in adw_avatar_draw_to_pixbuf().
+  - Fix a memory leak in the avatar demo.
+- Fix crashes by freeing shaders at the right time.
+- Specify the translation domain in UI files to avoid leaving them
+  unlocalized.
+- Fix cross-compilation with -Dgtk_doc=true.
+- Stop accepting NULL for most string properties, use the empty string
+  instead.
+- Translation updates:
+  - German
+  - Indonesian
+  - Chinese (China)
+
+=====================
+Version 1.0.0-alpha.1
+=====================
+
+- First libadwaita 1 alpha.
+- Check the migration guide in the documentation to port from libhandy
+  to it.
