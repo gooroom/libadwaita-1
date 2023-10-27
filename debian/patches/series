@@ -1,1 +1,2 @@
-gooroom-01-libadwaita-without-adwaita.patch
+gooroom-01-build-without-test.patch
+gooroom-02-libadwaita-without-adwaita.patch

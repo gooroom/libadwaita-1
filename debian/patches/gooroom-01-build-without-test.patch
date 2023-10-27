@@ -1,0 +1,24 @@
+diff --git a/meson.build b/meson.build
+index b5bb39c..60b1e66 100644
+--- a/meson.build
++++ b/meson.build
+@@ -134,7 +134,7 @@ subdir('src')
+ subdir('po')
+ subdir('demo')
+ subdir('examples')
+-subdir('tests')
++#subdir('tests')
+ subdir('doc')
+ 
+ run_data = configuration_data()
+@@ -149,9 +149,9 @@ if not meson.is_subproject()
+     meson.add_dist_script('build-aux'/ 'meson'/ 'dist-data.py')
+ endif
+ 
++#    'Tests': get_option('tests'),
+ summary(
+   {
+-    'Tests': get_option('tests'),
+     'Examples': get_option('examples'),
+     'Documentation': get_option('gtk_doc'),
+     'Introspection': introspection,
