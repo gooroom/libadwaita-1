@@ -1,3 +1,11 @@
+libadwaita-1 (1.2.2-1+grm4u1) unstable; urgency=medium
+
+  [ cjheo ]
+  * [a23abb29] Added libadwaita-without-adwaita patch
+  * [2ec0f42b] Added patch to build without test
+
+ -- Gooroom Autobuilder <jenkins@gooroom.kr>  Sat, 09 Mar 2024 17:14:18 +0900
+
 libadwaita-1 (1.2.2-1) unstable; urgency=medium
 
   * New upstream release
