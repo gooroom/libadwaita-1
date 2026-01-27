@@ -1,0 +1,6 @@
+# Gooroom local package - not intended for Debian upload
+libadwaita-1 source: no-nmu-in-changelog
+libadwaita-1 source: source-nmu-has-incorrect-version-number
+libadwaita-1 source: latest-debian-changelog-entry-without-new-date
+# Ubuntu-specific field for tracking original maintainer
+libadwaita-1 source: unknown-field Original-Maintainer

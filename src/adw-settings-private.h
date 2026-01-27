@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
  *
- * Author: Alexander Mikhaylenko <alexander.mikhaylenko@puri.sm>
+ * Author: Alice Mikhaylenko <alice.mikhaylenko@puri.sm>
  */
 
 #pragma once
@@ -13,6 +13,7 @@
 #endif
 
 #include <glib-object.h>
+#include "adw-accent-color-private.h"
 #include "adw-enums-private.h"
 
 G_BEGIN_DECLS
@@ -39,6 +40,18 @@ AdwSystemColorScheme adw_settings_get_color_scheme (AdwSettings *self);
 ADW_AVAILABLE_IN_ALL
 gboolean adw_settings_get_high_contrast (AdwSettings *self);
 
+ADW_AVAILABLE_IN_1_6
+gboolean adw_settings_get_system_supports_accent_colors (AdwSettings *self);
+
+ADW_AVAILABLE_IN_1_6
+AdwAccentColor adw_settings_get_accent_color (AdwSettings *self);
+
+ADW_AVAILABLE_IN_1_7
+const char *adw_settings_get_document_font_name (AdwSettings *self);
+
+ADW_AVAILABLE_IN_1_7
+const char *adw_settings_get_monospace_font_name (AdwSettings *self);
+
 ADW_AVAILABLE_IN_ALL
 void adw_settings_start_override (AdwSettings *self);
 ADW_AVAILABLE_IN_ALL
@@ -55,5 +68,11 @@ void adw_settings_override_color_scheme (AdwSettings          *self,
 ADW_AVAILABLE_IN_ALL
 void adw_settings_override_high_contrast (AdwSettings *self,
                                           gboolean     high_contrast);
+
+void adw_settings_override_system_supports_accent_colors (AdwSettings *self,
+                                                          gboolean     system_supports_accent_colors);
+
+void adw_settings_override_accent_color (AdwSettings    *self,
+                                         AdwAccentColor  accent_color);
 
 G_END_DECLS

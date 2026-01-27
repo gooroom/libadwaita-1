@@ -13,15 +13,13 @@
  *
  * A [class@Gtk.ListBoxRow] used to present preferences.
  *
- * The `AdwPreferencesRow` widget has a title that [class@PreferencesWindow]
+ * The `AdwPreferencesRow` widget has a title that [class@PreferencesDialog]
  * will use to let the user look for a preference. It doesn't present the title
  * in any way and lets you present the preference as you please.
  *
  * [class@ActionRow] and its derivatives are convenient to use as preference
  * rows as they take care of presenting the preference's title while letting you
  * compose the inputs of the preference around it.
- *
- * Since: 1.0
  */
 
 typedef struct
@@ -118,14 +116,12 @@ adw_preferences_row_class_init (AdwPreferencesRowClass *klass)
   object_class->finalize = adw_preferences_row_finalize;
 
   /**
-   * AdwPreferencesRow:title: (attributes org.gtk.Property.get=adw_preferences_row_get_title org.gtk.Property.set=adw_preferences_row_set_title)
+   * AdwPreferencesRow:title:
    *
    * The title of the preference represented by this row.
    *
    * The title is interpreted as Pango markup unless
    * [property@PreferencesRow:use-markup] is set to `FALSE`.
-   *
-   * Since: 1.0
    */
   props[PROP_TITLE] =
     g_param_spec_string ("title", NULL, NULL,
@@ -133,11 +129,9 @@ adw_preferences_row_class_init (AdwPreferencesRowClass *klass)
                          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
   /**
-   * AdwPreferencesRow:use-underline: (attributes org.gtk.Property.get=adw_preferences_row_get_use_underline org.gtk.Property.set=adw_preferences_row_set_use_underline)
+   * AdwPreferencesRow:use-underline:
    *
    * Whether an embedded underline in the title indicates a mnemonic.
-   *
-   * Since: 1.0
    */
   props[PROP_USE_UNDERLINE] =
     g_param_spec_boolean ("use-underline", NULL, NULL,
@@ -145,7 +139,7 @@ adw_preferences_row_class_init (AdwPreferencesRowClass *klass)
                           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
   /**
-   * AdwPreferencesRow:title-selectable: (attributes org.gtk.Property.get=adw_preferences_row_get_title_selectable org.gtk.Property.set=adw_preferences_row_set_title_selectable)
+   * AdwPreferencesRow:title-selectable:
    *
    * Whether the user can copy the title from the label.
    *
@@ -159,7 +153,7 @@ adw_preferences_row_class_init (AdwPreferencesRowClass *klass)
                           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
   /**
-   * AdwPreferencesRow:use-markup: (attributes org.gtk.Property.get=adw_preferences_row_get_use_markup org.gtk.Property.set=adw_preferences_row_set_use_markup)
+   * AdwPreferencesRow:use-markup:
    *
    * Whether to use Pango markup for the title label.
    *
@@ -191,8 +185,6 @@ adw_preferences_row_init (AdwPreferencesRow *self)
  * Creates a new `AdwPreferencesRow`.
  *
  * Returns: the newly created `AdwPreferencesRow`
- *
- * Since: 1.0
  */
 GtkWidget *
 adw_preferences_row_new (void)
@@ -201,14 +193,12 @@ adw_preferences_row_new (void)
 }
 
 /**
- * adw_preferences_row_get_title: (attributes org.gtk.Method.get_property=title)
+ * adw_preferences_row_get_title:
  * @self: a preferences row
  *
  * Gets the title of the preference represented by @self.
  *
  * Returns: the title
- *
- * Since: 1.0
  */
 const char *
 adw_preferences_row_get_title (AdwPreferencesRow *self)
@@ -223,7 +213,7 @@ adw_preferences_row_get_title (AdwPreferencesRow *self)
 }
 
 /**
- * adw_preferences_row_set_title: (attributes org.gtk.Method.set_property=title)
+ * adw_preferences_row_set_title:
  * @self: a preferences row
  * @title: the title
  *
@@ -231,8 +221,6 @@ adw_preferences_row_get_title (AdwPreferencesRow *self)
  *
  * The title is interpreted as Pango markup unless
  * [property@PreferencesRow:use-markup] is set to `FALSE`.
- *
- * Since: 1.0
  */
 void
 adw_preferences_row_set_title (AdwPreferencesRow *self,
@@ -244,24 +232,19 @@ adw_preferences_row_set_title (AdwPreferencesRow *self,
 
   priv = adw_preferences_row_get_instance_private (self);
 
-  if (g_strcmp0 (priv->title, title) == 0)
+  if (!g_set_str (&priv->title, title ? title : ""))
     return;
-
-  g_free (priv->title);
-  priv->title = g_strdup (title ? title : "");
 
   g_object_notify_by_pspec (G_OBJECT (self), props[PROP_TITLE]);
 }
 
 /**
- * adw_preferences_row_get_use_underline: (attributes org.gtk.Method.get_property=use-underline)
+ * adw_preferences_row_get_use_underline:
  * @self: a preferences row
  *
  * Gets whether an embedded underline in the title indicates a mnemonic.
  *
  * Returns: whether an embedded underline in the title indicates a mnemonic
- *
- * Since: 1.0
  */
 gboolean
 adw_preferences_row_get_use_underline (AdwPreferencesRow *self)
@@ -276,13 +259,11 @@ adw_preferences_row_get_use_underline (AdwPreferencesRow *self)
 }
 
 /**
- * adw_preferences_row_set_use_underline: (attributes org.gtk.Method.set_property=use-underline)
+ * adw_preferences_row_set_use_underline:
  * @self: a preferences row
  * @use_underline: `TRUE` if underlines in the text indicate mnemonics
  *
  * Sets whether an embedded underline in the title indicates a mnemonic.
- *
- * Since: 1.0
  */
 void
 adw_preferences_row_set_use_underline (AdwPreferencesRow *self,
@@ -305,8 +286,8 @@ adw_preferences_row_set_use_underline (AdwPreferencesRow *self,
 }
 
 /**
- * adw_preferences_row_get_title_selectable: (attributes org.gtk.Method.get_property=title-selectable)
- * @self: a `AdwPreferencesRow`
+ * adw_preferences_row_get_title_selectable:
+ * @self: a preferences row
  *
  * Gets whether the user can copy the title from the label
  *
@@ -325,8 +306,8 @@ adw_preferences_row_get_title_selectable (AdwPreferencesRow *self)
 }
 
 /**
- * adw_preferences_row_set_title_selectable: (attributes org.gtk.Method.set_property=title-selectable)
- * @self: a `AdwPreferencesRow`
+ * adw_preferences_row_set_title_selectable:
+ * @self: a preferences row
  * @title_selectable: `TRUE` if the user can copy the title from the label
  *
  * Sets whether the user can copy the title from the label
@@ -354,7 +335,7 @@ adw_preferences_row_set_title_selectable (AdwPreferencesRow *self,
 }
 
 /**
- * adw_preferences_row_get_use_markup: (attributes org.gtk.Method.get_property=use-markup)
+ * adw_preferences_row_get_use_markup:
  * @self: a preferences row
  *
  * Gets whether to use Pango markup for the title label.
@@ -376,7 +357,7 @@ adw_preferences_row_get_use_markup (AdwPreferencesRow *self)
 }
 
 /**
- * adw_preferences_row_set_use_markup: (attributes org.gtk.Method.set_property=use-markup)
+ * adw_preferences_row_set_use_markup:
  * @self: a preferences row
  * @use_markup: whether to use markup
  *

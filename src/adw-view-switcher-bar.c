@@ -8,7 +8,7 @@
 #include "config.h"
 
 #include "adw-enums.h"
-#include "adw-macros-private.h"
+#include "adw-breakpoint-bin-private.h"
 #include "adw-view-switcher-bar.h"
 
 /**
@@ -27,37 +27,37 @@
  * on mobile phones. It can't be revealed if there are less than two pages.
  *
  * `AdwViewSwitcherBar` is intended to be used together with
- * [class@ViewSwitcherTitle].
- *
- * A common use case is to bind the [property@ViewSwitcherBar:reveal] property
- * to [property@ViewSwitcherTitle:title-visible] to automatically reveal the
- * view switcher bar when the title label is displayed in place of the view
- * switcher, as follows:
+ * `AdwViewSwitcher` in a header bar, and a [class@Breakpoint] showing the view
+ * switcher bar on narrow sizes, while removing the view switcher from the
+ * header bar, as follows:
  *
  * ```xml
- * <object class="GtkWindow">
- *   <property name="titlebar">
- *     <object class="AdwHeaderBar">
- *       <property name="centering-policy">strict</property>
- *       <property name="title-widget">
- *         <object class="AdwViewSwitcherTitle" id="title">
- *           <property name="stack">stack</property>
- *         </object>
- *       </property>
+ * <object class="AdwWindow">
+ *   <child>
+ *     <object class="AdwBreakpoint">
+ *       <condition>max-width: 550sp</condition>
+ *       <setter object="switcher_bar" property="reveal">True</setter>
+ *       <setter object="header_bar" property="title-widget"/>
  *     </object>
- *   </property>
- *   <property name="child">
- *     <object class="GtkBox">
- *       <property name="orientation">vertical</property>
- *       <child>
- *         <object class="AdwViewStack" id="stack"/>
+ *   </child>
+ *   <property name="content">
+ *     <object class="AdwToolbarView">
+ *       <child type="top">
+ *         <object class="AdwHeaderBar" id="header_bar">
+ *           <property name="title-widget">
+ *             <object class="AdwViewSwitcher">
+ *               <property name="stack">stack</property>
+ *               <property name="policy">wide</property>
+ *             </object>
+ *           </property>
+ *         </object>
  *       </child>
- *       <child>
- *         <object class="AdwViewSwitcherBar">
+ *       <property name="content">
+ *         <object class="AdwViewStack" id="stack"/>
+ *       </property>
+ *       <child type="bottom">
+ *         <object class="AdwViewSwitcherBar" id="switcher_bar">
  *           <property name="stack">stack</property>
- *           <binding name="reveal">
- *             <lookup name="title-visible">title</lookup>
- *           </binding>
  *         </object>
  *       </child>
  *     </object>
@@ -65,11 +65,14 @@
  * </object>
  * ```
  *
+ * It's recommended to set [property@ViewSwitcher:policy] to
+ * `ADW_VIEW_SWITCHER_POLICY_WIDE` in this case.
+ *
+ * You may have to adjust the breakpoint condition for your specific pages.
+ *
  * ## CSS nodes
  *
  * `AdwViewSwitcherBar` has a single CSS node with name` viewswitcherbar`.
- *
- * Since: 1.0
  */
 
 enum {
@@ -120,6 +123,49 @@ update_bar_revealed (AdwViewSwitcherBar *self)
 }
 
 static void
+adw_view_switcher_bar_realize (GtkWidget *widget)
+{
+  AdwViewSwitcherBar *self = ADW_VIEW_SWITCHER_BAR (widget);
+  gboolean found_breakpoint_bin = FALSE;
+  GtkWidget *bin;
+  GtkRevealer *revealer;
+
+  GTK_WIDGET_CLASS (adw_view_switcher_bar_parent_class)->realize (widget);
+
+  bin = gtk_widget_get_ancestor (widget, ADW_TYPE_BREAKPOINT_BIN);
+
+  while (ADW_IS_BREAKPOINT_BIN (bin)) {
+    if (adw_breakpoint_bin_has_breakpoints (ADW_BREAKPOINT_BIN (bin))) {
+      found_breakpoint_bin = TRUE;
+      break;
+    }
+
+    bin = gtk_widget_get_parent (bin);
+
+    if (bin)
+      bin = gtk_widget_get_ancestor (bin, ADW_TYPE_BREAKPOINT_BIN);
+  }
+
+  revealer = GTK_REVEALER (gtk_widget_get_first_child (self->action_bar));
+
+  if (found_breakpoint_bin)
+    gtk_revealer_set_transition_duration (revealer, 0);
+}
+
+static void
+adw_view_switcher_bar_unrealize (GtkWidget *widget)
+{
+  AdwViewSwitcherBar *self = ADW_VIEW_SWITCHER_BAR (widget);
+  GtkRevealer *revealer;
+
+  revealer = GTK_REVEALER (gtk_widget_get_first_child (self->action_bar));
+
+  gtk_revealer_set_transition_duration (revealer, 250);
+
+  GTK_WIDGET_CLASS (adw_view_switcher_bar_parent_class)->unrealize (widget);
+}
+
+static void
 adw_view_switcher_bar_get_property (GObject    *object,
                                     guint       prop_id,
                                     GValue     *value,
@@ -166,8 +212,12 @@ adw_view_switcher_bar_dispose (GObject *object)
 {
   AdwViewSwitcherBar *self = ADW_VIEW_SWITCHER_BAR (object);
 
-  adw_view_switcher_bar_set_stack (self, NULL);
-  gtk_widget_unparent (self->action_bar);
+  if (self->pages) {
+    g_signal_handlers_disconnect_by_func (self->pages, G_CALLBACK (update_bar_revealed), self);
+    g_clear_object (&self->pages);
+  }
+
+  gtk_widget_dispose_template (GTK_WIDGET (self), ADW_TYPE_VIEW_SWITCHER_BAR);
 
   G_OBJECT_CLASS (adw_view_switcher_bar_parent_class)->dispose (object);
 }
@@ -182,12 +232,13 @@ adw_view_switcher_bar_class_init (AdwViewSwitcherBarClass *klass)
   object_class->set_property = adw_view_switcher_bar_set_property;
   object_class->dispose = adw_view_switcher_bar_dispose;
 
+  widget_class->realize = adw_view_switcher_bar_realize;
+  widget_class->unrealize = adw_view_switcher_bar_unrealize;
+
   /**
-   * AdwViewSwitcherBar:stack: (attributes org.gtk.Property.get=adw_view_switcher_bar_get_stack org.gtk.Property.set=adw_view_switcher_bar_set_stack)
+   * AdwViewSwitcherBar:stack:
    *
    * The stack the view switcher controls.
-   *
-   * Since: 1.0
    */
   props[PROP_STACK] =
     g_param_spec_object ("stack", NULL, NULL,
@@ -195,11 +246,9 @@ adw_view_switcher_bar_class_init (AdwViewSwitcherBarClass *klass)
                          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
   /**
-   * AdwViewSwitcherBar:reveal: (attributes org.gtk.Property.get=adw_view_switcher_bar_get_reveal org.gtk.Property.set=adw_view_switcher_bar_set_reveal)
+   * AdwViewSwitcherBar:reveal:
    *
    * Whether the bar should be revealed or hidden.
-   *
-   * Since: 1.0
    */
   props[PROP_REVEAL] =
     g_param_spec_boolean ("reveal", NULL, NULL,
@@ -231,8 +280,6 @@ adw_view_switcher_bar_init (AdwViewSwitcherBar *self)
  * Creates a new `AdwViewSwitcherBar`.
  *
  * Returns: the newly created `AdwViewSwitcherBar`
- *
- * Since: 1.0
  */
 GtkWidget *
 adw_view_switcher_bar_new (void)
@@ -241,14 +288,12 @@ adw_view_switcher_bar_new (void)
 }
 
 /**
- * adw_view_switcher_bar_get_stack: (attributes org.gtk.Method.get_property=stack)
+ * adw_view_switcher_bar_get_stack:
  * @self: a view switcher bar
  *
  * Gets the stack controlled by @self.
  *
  * Returns: (nullable) (transfer none): the stack
- *
- * Since: 1.0
  */
 AdwViewStack *
 adw_view_switcher_bar_get_stack (AdwViewSwitcherBar *self)
@@ -259,13 +304,11 @@ adw_view_switcher_bar_get_stack (AdwViewSwitcherBar *self)
 }
 
 /**
- * adw_view_switcher_bar_set_stack: (attributes org.gtk.Method.set_property=stack)
+ * adw_view_switcher_bar_set_stack:
  * @self: a view switcher bar
  * @stack: (nullable): a stack
  *
  * Sets the stack controlled by @self.
- *
- * Since: 1.0
  */
 void
 adw_view_switcher_bar_set_stack (AdwViewSwitcherBar *self,
@@ -300,14 +343,12 @@ adw_view_switcher_bar_set_stack (AdwViewSwitcherBar *self,
 }
 
 /**
- * adw_view_switcher_bar_get_reveal: (attributes org.gtk.Method.get_property=reveal)
+ * adw_view_switcher_bar_get_reveal:
  * @self: a view switcher bar
  *
  * Gets whether @self should be revealed or hidden.
  *
  * Returns: whether @self is revealed
- *
- * Since: 1.0
  */
 gboolean
 adw_view_switcher_bar_get_reveal (AdwViewSwitcherBar *self)
@@ -318,13 +359,11 @@ adw_view_switcher_bar_get_reveal (AdwViewSwitcherBar *self)
 }
 
 /**
- * adw_view_switcher_bar_set_reveal: (attributes org.gtk.Method.set_property=reveal)
+ * adw_view_switcher_bar_set_reveal:
  * @self: a view switcher bar
  * @reveal: whether to reveal @self
  *
  * Sets whether @self should be revealed or hidden.
- *
- * Since: 1.0
  */
 void
 adw_view_switcher_bar_set_reveal (AdwViewSwitcherBar *self,

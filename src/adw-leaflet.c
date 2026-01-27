@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2018 Purism SPC
- * Copyright (C) 2019 Alexander Mikhaylenko <exalm7659@gmail.com>
+ * Copyright (C) 2019 Alice Mikhaylenko <alicem@gnome.org>
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
  */
@@ -10,7 +10,6 @@
 #include "adw-animation-util.h"
 #include "adw-enums-private.h"
 #include "adw-fold-threshold-policy.h"
-#include "adw-macros-private.h"
 #include "adw-leaflet.h"
 #include "adw-shadow-helper-private.h"
 #include "adw-spring-animation.h"
@@ -54,13 +53,15 @@
  * style classes `.folded` when it is folded, `.unfolded` when it's not, or none
  * if it hasn't computed its fold yet.
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
  */
 
 /**
  * AdwLeafletPage:
  *
  * An auxiliary class used by [class@Leaflet].
+ *
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
  */
 
 /**
@@ -73,7 +74,7 @@
  *
  * New values may be added to this enumeration over time.
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
  */
 
 enum {
@@ -257,10 +258,7 @@ adw_leaflet_page_finalize (GObject *object)
 
   g_clear_object (&self->widget);
   g_clear_pointer (&self->name, g_free);
-
-  if (self->last_focus)
-    g_object_remove_weak_pointer (G_OBJECT (self->last_focus),
-                                  (gpointer *) &self->last_focus);
+  g_clear_weak_pointer (&self->last_focus);
 
   G_OBJECT_CLASS (adw_leaflet_page_parent_class)->finalize (object);
 }
@@ -275,31 +273,31 @@ adw_leaflet_page_class_init (AdwLeafletPageClass *klass)
   object_class->finalize = adw_leaflet_page_finalize;
 
   /**
-   * AdwLeafletPage:child: (attributes org.gtk.Property.get=adw_leaflet_page_get_child)
+   * AdwLeafletPage:child:
    *
    * The leaflet child to which the page belongs.
    *
-   * Since: 1.0
+   * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
    */
   page_props[PAGE_PROP_CHILD] =
     g_param_spec_object ("child", NULL, NULL,
                          GTK_TYPE_WIDGET,
-                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY | G_PARAM_STATIC_STRINGS);
+                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY | G_PARAM_STATIC_STRINGS | G_PARAM_DEPRECATED);
 
   /**
-   * AdwLeafletPage:name: (attributes org.gtk.Property.get=adw_leaflet_page_get_name org.gtk.Property.set=adw_leaflet_page_set_name)
+   * AdwLeafletPage:name:
    *
    * The name of the child page.
    *
-   * Since: 1.0
+   * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
    */
   page_props[PAGE_PROP_NAME] =
     g_param_spec_string ("name", NULL, NULL,
                          NULL,
-                         G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
+                         G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY | G_PARAM_DEPRECATED);
 
   /**
-   * AdwLeafletPage:navigatable: (attributes org.gtk.Property.get=adw_leaflet_page_get_navigatable org.gtk.Property.set=adw_leaflet_page_set_navigatable)
+   * AdwLeafletPage:navigatable:
    *
    * Whether the child can be navigated to when folded.
    *
@@ -309,12 +307,12 @@ adw_leaflet_page_class_init (AdwLeafletPageClass *klass)
    *
    * This can be used used to prevent switching to widgets like separators.
    *
-   * Since: 1.0
+   * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
    */
   page_props[PAGE_PROP_NAVIGATABLE] =
     g_param_spec_boolean ("navigatable", NULL, NULL,
                           TRUE,
-                          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
+                          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY | G_PARAM_DEPRECATED);
 
   g_object_class_install_properties (object_class, LAST_PAGE_PROP, page_props);
 }
@@ -725,12 +723,7 @@ set_visible_child (AdwLeaflet     *self,
       gtk_widget_is_ancestor (focus, self->visible_child->widget)) {
     contains_focus = TRUE;
 
-    if (self->visible_child->last_focus)
-      g_object_remove_weak_pointer (G_OBJECT (self->visible_child->last_focus),
-                                    (gpointer *)&self->visible_child->last_focus);
-    self->visible_child->last_focus = focus;
-    g_object_add_weak_pointer (G_OBJECT (self->visible_child->last_focus),
-                               (gpointer *)&self->visible_child->last_focus);
+    g_set_weak_pointer (&self->visible_child->last_focus, focus);
   }
 
   if (self->child_transition.transition_running)
@@ -837,7 +830,9 @@ static void
 start_mode_transition (AdwLeaflet *self,
                        double      target)
 {
-  if (adw_timed_animation_get_value_to (ADW_TIMED_ANIMATION (self->mode_transition.animation)) == target)
+  double value_to = adw_timed_animation_get_value_to (ADW_TIMED_ANIMATION (self->mode_transition.animation));
+
+  if (G_APPROX_VALUE (value_to, target, DBL_EPSILON))
     return;
 
   adw_animation_skip (self->child_transition.animation);
@@ -947,7 +942,8 @@ adw_leaflet_size_allocate_folded (AdwLeaflet *self,
   mode_transition_type = self->transition_type;
 
   /* Avoid useless computations and allow visible child transitions. */
-  if (self->mode_transition.current_pos <= 0.0) {
+  if (G_APPROX_VALUE (self->mode_transition.current_pos, 0.0, DBL_EPSILON) ||
+      self->mode_transition.current_pos < 0.0) {
     /* Child transitions should be applied only when folded and when no mode
      * transition is ongoing.
      */
@@ -1422,11 +1418,6 @@ back_forward_button_pressed_cb (GtkGesture *gesture,
   guint button;
   AdwNavigationDirection direction;
 
-  if (n_press > 1) {
-    gtk_gesture_set_state (gesture, GTK_EVENT_SEQUENCE_DENIED);
-    return;
-  }
-
   button = gtk_gesture_single_get_current_button (GTK_GESTURE_SINGLE (gesture));
 
   /* Unfortunately, there are no constants for these buttons */
@@ -1436,6 +1427,7 @@ back_forward_button_pressed_cb (GtkGesture *gesture,
     direction = ADW_NAVIGATION_DIRECTION_FORWARD;
   } else {
     gtk_gesture_set_state (gesture, GTK_EVENT_SEQUENCE_DENIED);
+    gtk_event_controller_reset (GTK_EVENT_CONTROLLER (gesture));
     return;
   }
 
@@ -1499,9 +1491,9 @@ end_swipe_cb (AdwSwipeTracker *tracker,
                                       self->child_transition.progress);
   adw_spring_animation_set_value_to (ADW_SPRING_ANIMATION (self->child_transition.animation),
                                     ABS (to));
-  self->child_transition.is_cancelled = (to == 0);
+  self->child_transition.is_cancelled = (G_APPROX_VALUE (to, 0, DBL_EPSILON));
 
-  if (!G_APPROX_VALUE (self->child_transition.progress, ABS (to), FLT_EPSILON))
+  if (!G_APPROX_VALUE (self->child_transition.progress, ABS (to), DBL_EPSILON))
     adw_spring_animation_set_initial_velocity (ADW_SPRING_ANIMATION (self->child_transition.animation),
                                                -velocity / adw_swipeable_get_distance (ADW_SWIPEABLE (self)));
   else
@@ -1661,12 +1653,10 @@ adw_leaflet_measure (GtkWidget      *widget,
 {
   AdwLeaflet *self = ADW_LEAFLET (widget);
   GList *l;
-  int visible_children;
   int child_min, max_min, visible_min, last_visible_min;
   int child_nat, max_nat, sum_nat;
   gboolean same_orientation;
 
-  visible_children = 0;
   child_min = max_min = visible_min = last_visible_min = 0;
   child_nat = max_nat = sum_nat = 0;
   for (l = self->children; l; l = l->next) {
@@ -1674,8 +1664,6 @@ adw_leaflet_measure (GtkWidget      *widget,
 
     if (page->widget == NULL || !gtk_widget_get_visible (page->widget))
       continue;
-
-    visible_children++;
 
     gtk_widget_measure (page->widget, orientation, for_size,
                         &child_min, &child_nat, NULL, NULL);
@@ -1913,7 +1901,7 @@ adw_leaflet_size_allocate (GtkWidget *widget,
     gtk_widget_size_allocate (page->widget, &page->alloc, baseline);
 
     if (gtk_widget_get_realized (widget))
-      gtk_widget_show (page->widget);
+      gtk_widget_set_visible (page->widget, TRUE);
   }
 
   allocate_shadow (self, width, height, baseline);
@@ -2135,6 +2123,7 @@ adw_leaflet_dispose (GObject *object)
   GtkWidget *child;
 
   g_clear_object (&self->shadow_helper);
+  g_clear_object (&self->tracker);
 
   if (self->pages)
     g_list_model_items_changed (G_LIST_MODEL (self->pages), 0,
@@ -2156,9 +2145,7 @@ adw_leaflet_finalize (GObject *object)
 
   self->visible_child = NULL;
 
-  if (self->pages)
-    g_object_remove_weak_pointer (G_OBJECT (self->pages),
-                                  (gpointer *) &self->pages);
+  g_clear_weak_pointer (&self->pages);
 
   G_OBJECT_CLASS (adw_leaflet_parent_class)->finalize (object);
 }
@@ -2186,19 +2173,19 @@ adw_leaflet_class_init (AdwLeafletClass *klass)
                                     "orientation");
 
   /**
-   * AdwLeaflet:can-unfold: (attributes org.gtk.Property.get=adw_leaflet_get_can_unfold org.gtk.Property.set=adw_leaflet_set_can_unfold)
+   * AdwLeaflet:can-unfold:
    *
    * Whether or not the leaflet can unfold.
    *
-   * Since: 1.0
+   * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
    */
   props[PROP_CAN_UNFOLD] =
     g_param_spec_boolean ("can-unfold", NULL, NULL,
                           TRUE,
-                          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
+                          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY | G_PARAM_DEPRECATED);
 
   /**
-   * AdwLeaflet:folded: (attributes org.gtk.Property.get=adw_leaflet_get_folded)
+   * AdwLeaflet:folded:
    *
    * Whether the leaflet is folded.
    *
@@ -2206,15 +2193,15 @@ adw_leaflet_class_init (AdwLeafletClass *klass)
    * sum of the minimum or natural sizes of the children (see
    * [property@Leaflet:fold-threshold-policy]), it will be unfolded otherwise.
    *
-   * Since: 1.0
+   * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
    */
   props[PROP_FOLDED] =
     g_param_spec_boolean ("folded", NULL, NULL,
                           FALSE,
-                          G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
+                          G_PARAM_READABLE | G_PARAM_STATIC_STRINGS | G_PARAM_DEPRECATED);
 
   /**
-   * AdwLeaflet:fold-threshold-policy: (attributes org.gtk.Property.get=adw_leaflet_get_fold_threshold_policy org.gtk.Property.set=adw_leaflet_set_fold_threshold_policy)
+   * AdwLeaflet:fold-threshold-policy:
    *
    * Determines when the leaflet will fold.
    *
@@ -2225,31 +2212,31 @@ adw_leaflet_class_init (AdwLeafletClass *klass)
    * This can be useful if you have a long ellipsizing label and want to let it
    * ellipsize instead of immediately folding.
    *
-   * Since: 1.0
+   * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
    */
   props[PROP_FOLD_THRESHOLD_POLICY] =
     g_param_spec_enum ("fold-threshold-policy", NULL, NULL,
                        ADW_TYPE_FOLD_THRESHOLD_POLICY,
                        ADW_FOLD_THRESHOLD_POLICY_MINIMUM,
-                       G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
+                       G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY | G_PARAM_DEPRECATED);
 
   /**
-   * AdwLeaflet:homogeneous: (attributes org.gtk.Property.get=adw_leaflet_get_homogeneous org.gtk.Property.set=adw_leaflet_set_homogeneous)
+   * AdwLeaflet:homogeneous:
    *
    * Whether the leaflet allocates the same size for all children when folded.
    *
    * If set to `FALSE`, different children can have different size along the
    * opposite orientation.
    *
-   * Since: 1.0
+   * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
    */
   props[PROP_HOMOGENEOUS] =
     g_param_spec_boolean ("homogeneous", NULL, NULL,
                           TRUE,
-                          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
+                          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY | G_PARAM_DEPRECATED);
 
   /**
-   * AdwLeaflet:visible-child: (attributes org.gtk.Property.get=adw_leaflet_get_visible_child org.gtk.Property.set=adw_leaflet_set_visible_child)
+   * AdwLeaflet:visible-child:
    *
    * The widget currently visible when the leaflet is folded.
    *
@@ -2258,29 +2245,29 @@ adw_leaflet_class_init (AdwLeafletClass *klass)
    * by the user, in which case visible child will change back to the previously
    * visible child.
    *
-   * Since: 1.0
+   * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
    */
   props[PROP_VISIBLE_CHILD] =
     g_param_spec_object ("visible-child", NULL, NULL,
                          GTK_TYPE_WIDGET,
-                         G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
+                         G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY | G_PARAM_DEPRECATED);
 
   /**
-   * AdwLeaflet:visible-child-name: (attributes org.gtk.Property.get=adw_leaflet_get_visible_child_name org.gtk.Property.set=adw_leaflet_set_visible_child_name)
+   * AdwLeaflet:visible-child-name:
    *
    * The name of the widget currently visible when the leaflet is folded.
    *
    * See [property@Leaflet:visible-child].
    *
-   * Since: 1.0
+   * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
    */
   props[PROP_VISIBLE_CHILD_NAME] =
     g_param_spec_string ("visible-child-name", NULL, NULL,
                          NULL,
-                         G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
+                         G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY | G_PARAM_DEPRECATED);
 
   /**
-   * AdwLeaflet:transition-type: (attributes org.gtk.Property.get=adw_leaflet_get_transition_type org.gtk.Property.set=adw_leaflet_set_transition_type)
+   * AdwLeaflet:transition-type:
    *
    * The type of animation used for transitions between modes and children.
    *
@@ -2288,27 +2275,27 @@ adw_leaflet_class_init (AdwLeafletClass *klass)
    * possible to change the animation based on the mode or child that is about
    * to become current.
    *
-   * Since: 1.0
+   * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
    */
   props[PROP_TRANSITION_TYPE] =
     g_param_spec_enum ("transition-type", NULL, NULL,
                        ADW_TYPE_LEAFLET_TRANSITION_TYPE, ADW_LEAFLET_TRANSITION_TYPE_OVER,
-                       G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
+                       G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY | G_PARAM_DEPRECATED);
 
   /**
-   * AdwLeaflet:mode-transition-duration: (attributes org.gtk.Property.get=adw_leaflet_get_mode_transition_duration org.gtk.Property.set=adw_leaflet_set_mode_transition_duration)
+   * AdwLeaflet:mode-transition-duration:
    *
    * The mode transition animation duration, in milliseconds.
    *
-   * Since: 1.0
+   * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
    */
   props[PROP_MODE_TRANSITION_DURATION] =
     g_param_spec_uint ("mode-transition-duration", NULL, NULL,
                        0, G_MAXUINT, 250,
-                       G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
+                       G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY | G_PARAM_DEPRECATED);
 
   /**
-   * AdwLeaflet:child-transition-params: (attributes org.gtk.Property.get=adw_leaflet_get_child_transition_params org.gtk.Property.set=adw_leaflet_set_child_transition_params)
+   * AdwLeaflet:child-transition-params:
    *
    * The child transition spring parameters.
    *
@@ -2318,27 +2305,27 @@ adw_leaflet_class_init (AdwLeafletClass *klass)
    * adw_spring_params_new (1, 0.5, 500)
    * ```
    *
-   * Since: 1.0
+   * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
    */
   props[PROP_CHILD_TRANSITION_PARAMS] =
     g_param_spec_boxed ("child-transition-params", NULL, NULL,
                         ADW_TYPE_SPRING_PARAMS,
-                        G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
+                        G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY | G_PARAM_DEPRECATED);
 
   /**
-   * AdwLeaflet:child-transition-running: (attributes org.gtk.Property.get=adw_leaflet_get_child_transition_running)
+   * AdwLeaflet:child-transition-running:
    *
    * Whether a child transition is currently running.
    *
-   * Since: 1.0
+   * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
    */
   props[PROP_CHILD_TRANSITION_RUNNING] =
     g_param_spec_boolean ("child-transition-running", NULL, NULL,
                           FALSE,
-                          G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
+                          G_PARAM_READABLE | G_PARAM_STATIC_STRINGS | G_PARAM_DEPRECATED);
 
   /**
-   * AdwLeaflet:can-navigate-back: (attributes org.gtk.Property.get=adw_leaflet_get_can_navigate_back org.gtk.Property.set=adw_leaflet_set_can_navigate_back)
+   * AdwLeaflet:can-navigate-back:
    *
    * Whether gestures and shortcuts for navigating backward are enabled.
    *
@@ -2358,15 +2345,15 @@ adw_leaflet_class_init (AdwLeafletClass *klass)
    * Only children that have [property@LeafletPage:navigatable] set to `TRUE`
    * can be navigated to.
    *
-   * Since: 1.0
+   * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
    */
   props[PROP_CAN_NAVIGATE_BACK] =
     g_param_spec_boolean ("can-navigate-back", NULL, NULL,
                           FALSE,
-                          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
+                          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY | G_PARAM_DEPRECATED);
 
   /**
-   * AdwLeaflet:can-navigate-forward: (attributes org.gtk.Property.get=adw_leaflet_get_can_navigate_forward org.gtk.Property.set=adw_leaflet_set_can_navigate_forward)
+   * AdwLeaflet:can-navigate-forward:
    *
    * Whether gestures and shortcuts for navigating forward are enabled.
    *
@@ -2386,15 +2373,15 @@ adw_leaflet_class_init (AdwLeafletClass *klass)
    * Only children that have [property@LeafletPage:navigatable] set to `TRUE`
    * can be navigated to.
    *
-   * Since: 1.0
+   * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
    */
   props[PROP_CAN_NAVIGATE_FORWARD] =
     g_param_spec_boolean ("can-navigate-forward", NULL, NULL,
                           FALSE,
-                          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
+                          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY | G_PARAM_DEPRECATED);
 
   /**
-   * AdwLeaflet:pages: (attributes org.gtk.Property.get=adw_leaflet_get_pages)
+   * AdwLeaflet:pages:
    *
    * A selection model with the leaflet's pages.
    *
@@ -2402,12 +2389,12 @@ adw_leaflet_class_init (AdwLeafletClass *klass)
    * [iface@Gtk.SelectionModel] and can be used to track and change the visible
    * page.
    *
-   * Since: 1.0
+   * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
    */
  props[PROP_PAGES] =
     g_param_spec_object ("pages", NULL, NULL,
                          GTK_TYPE_SELECTION_MODEL,
-                         G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
+                         G_PARAM_READABLE | G_PARAM_STATIC_STRINGS | G_PARAM_DEPRECATED);
 
   g_object_class_install_properties (object_class, LAST_PROP, props);
 
@@ -2570,7 +2557,7 @@ adw_leaflet_get_snap_points (AdwSwipeable *swipeable,
     upper = MAX (0, page ? self->child_transition.swipe_direction : 0);
   }
 
-  n = (lower != upper) ? 2 : 1;
+  n = !G_APPROX_VALUE (lower, upper, DBL_EPSILON) ? 2 : 1;
 
   points = g_new0 (double, n);
   points[0] = lower;
@@ -2672,14 +2659,14 @@ adw_leaflet_swipeable_init (AdwSwipeableInterface *iface)
 }
 
 /**
- * adw_leaflet_page_get_child: (attributes org.gtk.Method.get_property=child)
+ * adw_leaflet_page_get_child:
  * @self: a leaflet page
  *
  * Gets the leaflet child to which @self belongs.
  *
  * Returns: (transfer none): the child to which @self belongs
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
  */
 GtkWidget *
 adw_leaflet_page_get_child (AdwLeafletPage *self)
@@ -2690,14 +2677,14 @@ adw_leaflet_page_get_child (AdwLeafletPage *self)
 }
 
 /**
- * adw_leaflet_page_get_name: (attributes org.gtk.Method.get_property=name)
+ * adw_leaflet_page_get_name:
  * @self: a leaflet page
  *
  * Gets the name of @self.
  *
  * Returns: (nullable): the name of @self.
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
  */
 const char *
 adw_leaflet_page_get_name (AdwLeafletPage *self)
@@ -2708,13 +2695,13 @@ adw_leaflet_page_get_name (AdwLeafletPage *self)
 }
 
 /**
- * adw_leaflet_page_set_name: (attributes org.gtk.Method.set_property=name)
+ * adw_leaflet_page_set_name:
  * @self: a leaflet page
  * @name: (nullable): the new value to set
  *
  * Sets the name of the @self.
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
  */
 void
 adw_leaflet_page_set_name (AdwLeafletPage *self,
@@ -2745,11 +2732,9 @@ adw_leaflet_page_set_name (AdwLeafletPage *self,
     }
   }
 
-  if (name == self->name)
+  if (!g_set_str (&self->name, name))
     return;
 
-  g_free (self->name);
-  self->name = g_strdup (name);
   g_object_notify_by_pspec (G_OBJECT (self), page_props[PAGE_PROP_NAME]);
 
   if (leaflet && leaflet->visible_child == self)
@@ -2757,14 +2742,14 @@ adw_leaflet_page_set_name (AdwLeafletPage *self,
 }
 
 /**
- * adw_leaflet_page_get_navigatable: (attributes org.gtk.Method.get_property=navigatable)
+ * adw_leaflet_page_get_navigatable:
  * @self: a leaflet page
  *
  * Gets whether the child can be navigated to when folded.
  *
  * Returns: whether @self can be navigated to when folded
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
  */
 gboolean
 adw_leaflet_page_get_navigatable (AdwLeafletPage *self)
@@ -2775,7 +2760,7 @@ adw_leaflet_page_get_navigatable (AdwLeafletPage *self)
 }
 
 /**
- * adw_leaflet_page_set_navigatable: (attributes org.gtk.Method.set_property=navigatable)
+ * adw_leaflet_page_set_navigatable:
  * @self: a leaflet page
  * @navigatable: whether @self can be navigated to when folded
  *
@@ -2786,7 +2771,7 @@ adw_leaflet_page_get_navigatable (AdwLeafletPage *self)
  *
  * This can be used used to prevent switching to widgets like separators.
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
  */
 void
 adw_leaflet_page_set_navigatable (AdwLeafletPage *self,
@@ -2818,7 +2803,7 @@ adw_leaflet_page_set_navigatable (AdwLeafletPage *self,
  *
  * Returns: the new created `AdwLeaflet`
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
  */
 GtkWidget *
 adw_leaflet_new (void)
@@ -2835,7 +2820,7 @@ adw_leaflet_new (void)
  *
  * Returns: (transfer none): the [class@LeafletPage] for @child
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
  */
 AdwLeafletPage *
 adw_leaflet_append (AdwLeaflet *self,
@@ -2864,7 +2849,7 @@ adw_leaflet_append (AdwLeaflet *self,
  *
  * Returns: (transfer none): the [class@LeafletPage] for @child
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
  */
 AdwLeafletPage *
 adw_leaflet_prepend (AdwLeaflet *self,
@@ -2889,7 +2874,7 @@ adw_leaflet_prepend (AdwLeaflet *self,
  *
  * Returns: (transfer none): the [class@LeafletPage] for @child
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
  */
 AdwLeafletPage *
 adw_leaflet_insert_child_after (AdwLeaflet *self,
@@ -2926,7 +2911,7 @@ adw_leaflet_insert_child_after (AdwLeaflet *self,
  *
  * If @sibling is `NULL`, moves @child to the first position.
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
  */
 void
 adw_leaflet_reorder_child_after (AdwLeaflet *self,
@@ -2993,7 +2978,7 @@ adw_leaflet_reorder_child_after (AdwLeaflet *self,
  *
  * Removes a child widget from @self.
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
  */
 void
 adw_leaflet_remove (AdwLeaflet *self,
@@ -3028,7 +3013,7 @@ adw_leaflet_remove (AdwLeaflet *self,
  *
  * Returns: (transfer none): the page object for @child
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
  */
 AdwLeafletPage *
 adw_leaflet_get_page (AdwLeaflet *self,
@@ -3041,13 +3026,13 @@ adw_leaflet_get_page (AdwLeaflet *self,
 }
 
 /**
- * adw_leaflet_set_can_unfold: (attributes org.gtk.Method.set_property=can-unfold)
+ * adw_leaflet_set_can_unfold:
  * @self: a leaflet
  * @can_unfold: whether @self can unfold
  *
  * Sets whether @self can unfold.
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
  */
 void
 adw_leaflet_set_can_unfold (AdwLeaflet *self,
@@ -3068,14 +3053,14 @@ adw_leaflet_set_can_unfold (AdwLeaflet *self,
 }
 
 /**
- * adw_leaflet_get_can_unfold: (attributes org.gtk.Method.get_property=can-unfold)
+ * adw_leaflet_get_can_unfold:
  * @self: a leaflet
  *
  * Gets whether @self can unfold.
  *
  * Returns: whether @self can unfold
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
  */
 gboolean
 adw_leaflet_get_can_unfold (AdwLeaflet *self)
@@ -3086,7 +3071,7 @@ adw_leaflet_get_can_unfold (AdwLeaflet *self)
 }
 
 /**
- * adw_leaflet_get_folded: (attributes org.gtk.Method.get_property=folded)
+ * adw_leaflet_get_folded:
  * @self: a leaflet
  *
  * Gets whether @self is folded.
@@ -3097,7 +3082,7 @@ adw_leaflet_get_can_unfold (AdwLeaflet *self)
  *
  * Returns: whether @self is folded.
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
  */
 gboolean
 adw_leaflet_get_folded (AdwLeaflet *self)
@@ -3108,12 +3093,14 @@ adw_leaflet_get_folded (AdwLeaflet *self)
 }
 
 /**
- * adw_leaflet_get_fold_threshold_policy: (attributes org.gtk.Method.get_property=fold-threshold-policy)
+ * adw_leaflet_get_fold_threshold_policy:
  * @self: a leaflet
  *
  * Gets the fold threshold policy for @self.
  *
- * Since: 1.0
+ * Returns: the fold threshold policy
+ *
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
  */
 AdwFoldThresholdPolicy
 adw_leaflet_get_fold_threshold_policy (AdwLeaflet *self)
@@ -3125,7 +3112,7 @@ adw_leaflet_get_fold_threshold_policy (AdwLeaflet *self)
 
 
 /**
- * adw_leaflet_set_fold_threshold_policy: (attributes org.gtk.Method.set_property=fold-threshold-policy)
+ * adw_leaflet_set_fold_threshold_policy:
  * @self: a leaflet
  * @policy: the policy to use
  *
@@ -3138,7 +3125,7 @@ adw_leaflet_get_fold_threshold_policy (AdwLeaflet *self)
  * This can be useful if you have a long ellipsizing label and want to let it
  * ellipsize instead of immediately folding.
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
  */
 void
 adw_leaflet_set_fold_threshold_policy (AdwLeaflet             *self,
@@ -3158,14 +3145,14 @@ adw_leaflet_set_fold_threshold_policy (AdwLeaflet             *self,
 }
 
 /**
- * adw_leaflet_get_homogeneous: (attributes org.gtk.Method.get_property=homogeneous)
+ * adw_leaflet_get_homogeneous:
  * @self: a leaflet
  *
  * Gets whether @self is homogeneous.
  *
  * Returns: whether @self is homogeneous
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
  */
 gboolean
 adw_leaflet_get_homogeneous (AdwLeaflet *self)
@@ -3176,7 +3163,7 @@ adw_leaflet_get_homogeneous (AdwLeaflet *self)
 }
 
 /**
- * adw_leaflet_set_homogeneous: (attributes org.gtk.Method.set_property=homogeneous)
+ * adw_leaflet_set_homogeneous:
  * @self: a leaflet
  * @homogeneous: whether to make @self homogeneous
  *
@@ -3185,7 +3172,7 @@ adw_leaflet_get_homogeneous (AdwLeaflet *self)
  * If set to `FALSE`, different children can have different size along the
  * opposite orientation.
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
  */
 void
 adw_leaflet_set_homogeneous (AdwLeaflet *self,
@@ -3206,14 +3193,14 @@ adw_leaflet_set_homogeneous (AdwLeaflet *self,
 }
 
 /**
- * adw_leaflet_get_visible_child: (attributes org.gtk.Method.get_property=visible-child)
+ * adw_leaflet_get_visible_child:
  * @self: a leaflet
  *
  * Gets the widget currently visible when the leaflet is folded.
  *
  * Returns: (nullable) (transfer none): the visible child
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
  */
 GtkWidget *
 adw_leaflet_get_visible_child (AdwLeaflet *self)
@@ -3227,7 +3214,7 @@ adw_leaflet_get_visible_child (AdwLeaflet *self)
 }
 
 /**
- * adw_leaflet_set_visible_child: (attributes org.gtk.Method.set_property=visible-child)
+ * adw_leaflet_set_visible_child:
  * @self: a leaflet
  * @visible_child: the new child
  *
@@ -3238,7 +3225,7 @@ adw_leaflet_get_visible_child (AdwLeaflet *self)
  * by the user, in which case visible child will change back to the previously
  * visible child.
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
  */
 void
 adw_leaflet_set_visible_child (AdwLeaflet *self,
@@ -3260,14 +3247,14 @@ adw_leaflet_set_visible_child (AdwLeaflet *self,
 }
 
 /**
- * adw_leaflet_get_visible_child_name: (attributes org.gtk.Method.get_property=visible-child-name)
+ * adw_leaflet_get_visible_child_name:
  * @self: a leaflet
  *
  * Gets the name of the currently visible child widget.
  *
  * Returns: (nullable) (transfer none): the name of the visible child
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
  */
 const char *
 adw_leaflet_get_visible_child_name (AdwLeaflet *self)
@@ -3281,7 +3268,7 @@ adw_leaflet_get_visible_child_name (AdwLeaflet *self)
 }
 
 /**
- * adw_leaflet_set_visible_child_name: (attributes org.gtk.Method.set_property=visible-child-name)
+ * adw_leaflet_set_visible_child_name:
  * @self: a leaflet
  * @name: the name of a child
  *
@@ -3289,7 +3276,7 @@ adw_leaflet_get_visible_child_name (AdwLeaflet *self)
  *
  * See [property@Leaflet:visible-child].
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
  */
 void
 adw_leaflet_set_visible_child_name (AdwLeaflet *self,
@@ -3310,14 +3297,14 @@ adw_leaflet_set_visible_child_name (AdwLeaflet *self,
 }
 
 /**
- * adw_leaflet_get_transition_type: (attributes org.gtk.Method.get_property=transition-type)
+ * adw_leaflet_get_transition_type:
  * @self: a leaflet
  *
  * Gets the type of animation used for transitions between modes and children.
  *
  * Returns: the current transition type of @self
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
  */
 AdwLeafletTransitionType
 adw_leaflet_get_transition_type (AdwLeaflet *self)
@@ -3328,7 +3315,7 @@ adw_leaflet_get_transition_type (AdwLeaflet *self)
 }
 
 /**
- * adw_leaflet_set_transition_type: (attributes org.gtk.Method.set_property=transition-type)
+ * adw_leaflet_set_transition_type:
  * @self: a leaflet
  * @transition: the new transition type
  *
@@ -3338,7 +3325,7 @@ adw_leaflet_get_transition_type (AdwLeaflet *self)
  * possible to change the animation based on the mode or child that is about to
  * become current.
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
  */
 void
 adw_leaflet_set_transition_type (AdwLeaflet               *self,
@@ -3368,14 +3355,14 @@ adw_leaflet_set_transition_type (AdwLeaflet               *self,
 }
 
 /**
- * adw_leaflet_get_mode_transition_duration: (attributes org.gtk.Method.get_property=mode-transition-duration)
+ * adw_leaflet_get_mode_transition_duration:
  * @self: a leaflet
  *
  * Gets the mode transition animation duration for @self.
  *
  * Returns: the mode transition duration, in milliseconds.
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
  */
 guint
 adw_leaflet_get_mode_transition_duration (AdwLeaflet *self)
@@ -3386,13 +3373,13 @@ adw_leaflet_get_mode_transition_duration (AdwLeaflet *self)
 }
 
 /**
- * adw_leaflet_set_mode_transition_duration: (attributes org.gtk.Method.set_property=mode-transition-duration)
+ * adw_leaflet_set_mode_transition_duration:
  * @self: a leaflet
  * @duration: the new duration, in milliseconds
  *
  * Sets the mode transition animation duration for @self.
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
  */
 void
 adw_leaflet_set_mode_transition_duration (AdwLeaflet *self,
@@ -3413,14 +3400,14 @@ adw_leaflet_set_mode_transition_duration (AdwLeaflet *self,
 }
 
 /**
- * adw_leaflet_get_child_transition_params: (attributes org.gtk.Method.get_property=child-transition-params)
+ * adw_leaflet_get_child_transition_params:
  * @self: a leaflet
  *
  * Gets the child transition spring parameters for @self.
  *
  * Returns: the child transition parameters
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
  */
 AdwSpringParams *
 adw_leaflet_get_child_transition_params (AdwLeaflet *self)
@@ -3431,7 +3418,7 @@ adw_leaflet_get_child_transition_params (AdwLeaflet *self)
 }
 
 /**
- * adw_leaflet_set_child_transition_params: (attributes org.gtk.Method.set_property=child-transition-params)
+ * adw_leaflet_set_child_transition_params:
  * @self: a leaflet
  * @params: the new parameters
  *
@@ -3443,7 +3430,7 @@ adw_leaflet_get_child_transition_params (AdwLeaflet *self)
  * adw_spring_params_new (1, 0.5, 500)
  * ```
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
  */
 void
 adw_leaflet_set_child_transition_params (AdwLeaflet      *self,
@@ -3462,14 +3449,14 @@ adw_leaflet_set_child_transition_params (AdwLeaflet      *self,
 }
 
 /**
- * adw_leaflet_get_child_transition_running: (attributes org.gtk.Method.get_property=child-transition-running)
+ * adw_leaflet_get_child_transition_running:
  * @self: a leaflet
  *
  * Gets whether a child transition is currently running for @self.
  *
  * Returns: whether a transition is currently running
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
  */
 gboolean
 adw_leaflet_get_child_transition_running (AdwLeaflet *self)
@@ -3480,14 +3467,14 @@ adw_leaflet_get_child_transition_running (AdwLeaflet *self)
 }
 
 /**
- * adw_leaflet_get_can_navigate_back: (attributes org.gtk.Method.get_property=can-navigate-back)
+ * adw_leaflet_get_can_navigate_back:
  * @self: a leaflet
  *
  * Gets whether gestures and shortcuts for navigating backward are enabled.
  *
  * Returns: Whether gestures and shortcuts are enabled.
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
  */
 gboolean
 adw_leaflet_get_can_navigate_back (AdwLeaflet *self)
@@ -3498,7 +3485,7 @@ adw_leaflet_get_can_navigate_back (AdwLeaflet *self)
 }
 
 /**
- * adw_leaflet_set_can_navigate_back: (attributes org.gtk.Method.set_property=can-navigate-back)
+ * adw_leaflet_set_can_navigate_back:
  * @self: a leaflet
  * @can_navigate_back: the new value
  *
@@ -3520,7 +3507,7 @@ adw_leaflet_get_can_navigate_back (AdwLeaflet *self)
  * Only children that have [property@LeafletPage:navigatable] set to `TRUE` can
  * be navigated to.
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
  */
 void
 adw_leaflet_set_can_navigate_back (AdwLeaflet *self,
@@ -3540,14 +3527,14 @@ adw_leaflet_set_can_navigate_back (AdwLeaflet *self,
 }
 
 /**
- * adw_leaflet_get_can_navigate_forward: (attributes org.gtk.Method.get_property=can-navigate-forward)
+ * adw_leaflet_get_can_navigate_forward:
  * @self: a leaflet
  *
  * Gets whether gestures and shortcuts for navigating forward are enabled.
  *
  * Returns: Whether gestures and shortcuts are enabled.
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
  */
 gboolean
 adw_leaflet_get_can_navigate_forward (AdwLeaflet *self)
@@ -3558,7 +3545,7 @@ adw_leaflet_get_can_navigate_forward (AdwLeaflet *self)
 }
 
 /**
- * adw_leaflet_set_can_navigate_forward: (attributes org.gtk.Method.set_property=can-navigate-forward)
+ * adw_leaflet_set_can_navigate_forward:
  * @self: a leaflet
  * @can_navigate_forward: the new value
  *
@@ -3580,7 +3567,7 @@ adw_leaflet_get_can_navigate_forward (AdwLeaflet *self)
  * Only children that have [property@LeafletPage:navigatable] set to `TRUE` can
  * be navigated to.
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
  */
 void
 adw_leaflet_set_can_navigate_forward (AdwLeaflet *self,
@@ -3615,7 +3602,7 @@ adw_leaflet_set_can_navigate_forward (AdwLeaflet *self,
  *
  * Returns: (nullable) (transfer none): the previous or next child
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
  */
 GtkWidget *
 adw_leaflet_get_adjacent_child (AdwLeaflet             *self,
@@ -3645,7 +3632,7 @@ adw_leaflet_get_adjacent_child (AdwLeaflet             *self,
  *
  * Returns: whether the visible child was changed
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
  */
 gboolean
 adw_leaflet_navigate (AdwLeaflet             *self,
@@ -3680,7 +3667,7 @@ adw_leaflet_navigate (AdwLeaflet             *self,
  *
  * Returns: (transfer none) (nullable): the requested child of @self
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
  */
 GtkWidget *
 adw_leaflet_get_child_by_name (AdwLeaflet  *self,
@@ -3697,7 +3684,7 @@ adw_leaflet_get_child_by_name (AdwLeaflet  *self,
 }
 
 /**
- * adw_leaflet_get_pages: (attributes org.gtk.Method.get_property=pages)
+ * adw_leaflet_get_pages:
  * @self: a leaflet
  *
  * Returns a [iface@Gio.ListModel] that contains the pages of the leaflet.
@@ -3708,7 +3695,7 @@ adw_leaflet_get_child_by_name (AdwLeaflet  *self,
  *
  * Returns: (transfer full): a `GtkSelectionModel` for the leaflet's children
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwleaflet)
  */
 GtkSelectionModel *
 adw_leaflet_get_pages (AdwLeaflet *self)
@@ -3718,8 +3705,8 @@ adw_leaflet_get_pages (AdwLeaflet *self)
   if (self->pages)
     return g_object_ref (self->pages);
 
-  self->pages = GTK_SELECTION_MODEL (adw_leaflet_pages_new (self));
-  g_object_add_weak_pointer (G_OBJECT (self->pages), (gpointer *) &self->pages);
+  g_set_weak_pointer (&self->pages,
+                      GTK_SELECTION_MODEL (adw_leaflet_pages_new (self)));
 
   return self->pages;
 }

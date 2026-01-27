@@ -13,6 +13,7 @@
         <property name="orientation">vertical</property>
         <child>
           <object class="GtkListBox">
+            <property name="accessible-role">generic</property>
             <property name="selection-mode">none</property>
             <!-- The header row is focusable, activatable, and can be activated
                  by clicking it or via keyboard. Activating the row should
@@ -31,13 +32,18 @@
                 <property name="use-underline" bind-source="AdwExpanderRow" bind-property="use-underline" bind-flags="sync-create"/>
                 <property name="selectable" bind-source="AdwExpanderRow" bind-property="title-selectable" bind-flags="sync-create"/>
                 <property name="use-markup" bind-source="AdwExpanderRow" bind-property="use-markup" bind-flags="sync-create"/>
+                <accessibility>
+                  <state name="expanded">False</state>
+                </accessibility>
                 <style>
                   <class name="header"/>
                 </style>
                 <child>
-                  <object class="GtkBox" id="actions">
-                    <property name="spacing">12</property>
+                  <object class="GtkBox" id="suffixes">
                     <property name="visible">False</property>
+                    <style>
+                      <class name="suffixes"/>
+                    </style>
                   </object>
                 </child>
                 <child>
@@ -45,12 +51,17 @@
                     <property name="active" bind-source="AdwExpanderRow" bind-property="enable-expansion" bind-flags="bidirectional|sync-create"/>
                     <property name="valign">center</property>
                     <property name="visible" bind-source="AdwExpanderRow" bind-property="show-enable-switch" bind-flags="bidirectional|sync-create"/>
+                    <accessibility>
+                      <relation name="labelled-by">AdwExpanderRow</relation>
+                      <relation name="described-by">AdwExpanderRow</relation>
+                    </accessibility>
                   </object>
                 </child>
                 <child>
                   <object class="GtkImage" id="image">
                     <property name="icon-name">adw-expander-arrow-symbolic</property>
                     <property name="sensitive" bind-source="AdwExpanderRow" bind-property="enable-expansion" bind-flags="sync-create"/>
+                    <property name="accessible-role">presentation</property>
                     <style>
                       <class name="expander-row-arrow"/>
                     </style>

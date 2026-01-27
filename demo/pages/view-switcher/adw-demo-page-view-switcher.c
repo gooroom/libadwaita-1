@@ -1,24 +1,18 @@
 #include "adw-demo-page-view-switcher.h"
 
-#include <glib/gi18n.h>
-
-#include "adw-view-switcher-demo-window.h"
+#include "adw-view-switcher-demo-dialog.h"
 
 struct _AdwDemoPageViewSwitcher
 {
   AdwBin parent_instance;
 };
 
-G_DEFINE_TYPE (AdwDemoPageViewSwitcher, adw_demo_page_view_switcher, ADW_TYPE_BIN)
+G_DEFINE_FINAL_TYPE (AdwDemoPageViewSwitcher, adw_demo_page_view_switcher, ADW_TYPE_BIN)
 
 static void
 demo_run_cb (AdwDemoPageViewSwitcher *self)
 {
-  AdwViewSwitcherDemoWindow *window = adw_view_switcher_demo_window_new ();
-  GtkRoot *root = gtk_widget_get_root (GTK_WIDGET (self));
-
-  gtk_window_set_transient_for (GTK_WINDOW (window), GTK_WINDOW (root));
-  gtk_window_present (GTK_WINDOW (window));
+  adw_dialog_present (adw_view_switcher_demo_dialog_new (), GTK_WIDGET (self));
 }
 
 static void

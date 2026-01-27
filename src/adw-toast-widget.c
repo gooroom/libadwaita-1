@@ -9,13 +9,13 @@
 #include "adw-toast-widget-private.h"
 
 #include "adw-bin.h"
-#include "adw-macros-private.h"
 
 struct _AdwToastWidget {
   GtkWidget parent_instance;
 
   AdwBin *title_bin;
   GtkWidget *action_button;
+  GtkWidget *close_button;
 
   AdwToast *toast;
 
@@ -40,14 +40,12 @@ string_is_not_empty (gpointer    user_data,
   return string && string[0];
 }
 
-static gboolean
+static void
 timeout_cb (AdwToastWidget *self)
 {
   self->hide_timeout_id = 0;
 
   adw_toast_dismiss (self->toast);
-
-  return G_SOURCE_REMOVE;
 }
 
 static void
@@ -57,7 +55,9 @@ start_timeout (AdwToastWidget *self)
 
   if (!self->hide_timeout_id && timeout)
     self->hide_timeout_id =
-      g_timeout_add (timeout * 1000, G_SOURCE_FUNC (timeout_cb), self);
+      g_timeout_add_once (timeout * 1000,
+                          (GSourceOnceFunc) (timeout_cb),
+                          self);
 }
 
 static void
@@ -90,13 +90,11 @@ dismiss (AdwToastWidget *self)
   adw_toast_dismiss (self->toast);
 }
 
-static gboolean
+static void
 close_idle_cb (AdwToastWidget *self)
 {
   dismiss (self);
   g_object_unref (self);
-
-  return G_SOURCE_REMOVE;
 }
 
 static void
@@ -108,7 +106,7 @@ action_clicked_cb (AdwToastWidget *self)
 
   /* Keep the widget alive through the idle. Otherwise it may be immediately
    * destroyed if animations are disabled */
-  g_idle_add (G_SOURCE_FUNC (close_idle_cb), g_object_ref (self));
+  g_idle_add_once ((GSourceOnceFunc) close_idle_cb, g_object_ref (self));
 }
 
 static void
@@ -130,9 +128,12 @@ update_title_widget (AdwToastWidget *self)
 
     gtk_label_set_ellipsize (GTK_LABEL (title), PANGO_ELLIPSIZE_END);
     gtk_label_set_xalign (GTK_LABEL (title), 0.0);
-    gtk_label_set_use_markup (GTK_LABEL (title), TRUE);
     gtk_label_set_single_line_mode (GTK_LABEL (title), TRUE);
     gtk_widget_add_css_class (title, "heading");
+
+    g_object_bind_property (self->toast, "use-markup",
+                            title, "use-markup",
+                            G_BINDING_SYNC_CREATE);
 
     g_object_bind_property (self->toast, "title",
                             title, "label",
@@ -174,14 +175,12 @@ static void
 adw_toast_widget_dispose (GObject *object)
 {
   AdwToastWidget *self = ADW_TOAST_WIDGET (object);
-  GtkWidget *child;
 
   end_timeout (self);
 
   set_toast (self, NULL);
 
-  while ((child = gtk_widget_get_first_child (GTK_WIDGET (self))))
-    gtk_widget_unparent (child);
+  gtk_widget_dispose_template (GTK_WIDGET (self), ADW_TYPE_TOAST_WIDGET);
 
   G_OBJECT_CLASS (adw_toast_widget_parent_class)->dispose (object);
 }
@@ -242,6 +241,7 @@ adw_toast_widget_class_init (AdwToastWidgetClass *klass)
 
   gtk_widget_class_bind_template_child (widget_class, AdwToastWidget, title_bin);
   gtk_widget_class_bind_template_child (widget_class, AdwToastWidget, action_button);
+  gtk_widget_class_bind_template_child (widget_class, AdwToastWidget, close_button);
 
   gtk_widget_class_bind_template_callback (widget_class, string_is_not_empty);
   gtk_widget_class_bind_template_callback (widget_class, action_clicked_cb);
@@ -251,6 +251,8 @@ adw_toast_widget_class_init (AdwToastWidgetClass *klass)
 
   gtk_widget_class_set_layout_manager_type (widget_class, GTK_TYPE_BOX_LAYOUT);
   gtk_widget_class_set_css_name (widget_class, "toast");
+
+  gtk_widget_class_set_accessible_role (widget_class, GTK_ACCESSIBLE_ROLE_ALERT);
 }
 
 static void

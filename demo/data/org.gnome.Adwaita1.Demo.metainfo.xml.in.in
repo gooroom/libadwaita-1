@@ -4,9 +4,16 @@
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>LGPL-2.1-or-later</project_license>
   <launchable type="desktop-id">org.gnome.Adwaita1.Demo.desktop</launchable>
+  <developer id="org.gnome">
+    <name>The GNOME Project</name>
+  </developer>
 
   <name>Adwaita Demo</name>
   <summary>Tour of the features in Libadwaita</summary>
+
+  <categories>
+    <category>Development</category>
+  </categories>
 
   <description>
     <p>
@@ -34,7 +41,7 @@
 
   <url type="homepage">https://gitlab.gnome.org/GNOME/libadwaita</url>
   <url type="bugtracker">https://gitlab.gnome.org/GNOME/libadwaita/issues</url>
-  <url type="donation">http://www.gnome.org/friends/</url>
+  <url type="donation">https://www.gnome.org/friends/</url>
 
   <content_rating type="oars-1.1" />
   <translation type="gettext">libadwaita</translation>

@@ -31,6 +31,7 @@
                 <property name="child">
                   <object class="GtkImage" id="horizontal_image">
                     <property name="icon-name" bind-source="AdwViewSwitcherButton" bind-property="icon-name" bind-flags="sync-create" />
+                    <property name="accessible-role">presentation</property>
                   </object>
                 </property>
               </object>
@@ -39,6 +40,7 @@
               <object class="GtkLabel" id="horizontal_label">
                 <property name="label" bind-source="AdwViewSwitcherButton" bind-property="label" bind-flags="sync-create|bidirectional" />
                 <property name="use-underline" bind-source="AdwViewSwitcherButton" bind-property="use-underline" bind-flags="sync-create|bidirectional" />
+                <property name="ellipsize">end</property>
               </object>
             </child>
           </object>
@@ -66,6 +68,7 @@
                 <property name="child">
                   <object class="GtkImage" id="vertical_image">
                     <property name="icon-name" bind-source="AdwViewSwitcherButton" bind-property="icon-name" bind-flags="sync-create" />
+                    <property name="accessible-role">presentation</property>
                   </object>
                 </property>
               </object>

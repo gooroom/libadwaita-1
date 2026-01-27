@@ -12,7 +12,24 @@
 #include <glib/gi18n-lib.h>
 #include <gtk/gtk.h>
 
-static int adw_initialized = FALSE;
+static gboolean adw_initialized = FALSE;
+static gboolean adw_adaptive_preview = FALSE;
+
+static void
+init_debug (void)
+{
+  const char *env = g_getenv ("ADW_DEBUG_ADAPTIVE_PREVIEW");
+
+  if (!env || !*env)
+    return;
+
+  if (!g_strcmp0 (env, "1"))
+    adw_adaptive_preview = TRUE;
+  else if (!g_strcmp0 (env, "0"))
+    adw_adaptive_preview = FALSE;
+  else
+    g_warning ("Invalid value for ADW_DEBUG_ADAPTIVE_PREVIEW: %s (Expected 0 or 1)", env);
+}
 
 /**
  * adw_init:
@@ -28,8 +45,6 @@ static int adw_initialized = FALSE;
  *
  * This makes sure translations, types, themes, and icons for the Adwaita
  * library are set up properly.
- *
- * Since: 1.0
  */
 void
 adw_init (void)
@@ -43,16 +58,20 @@ adw_init (void)
   bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
   adw_init_public_types ();
 
-  gtk_icon_theme_add_resource_path (gtk_icon_theme_get_for_display (gdk_display_get_default ()),
-                                    "/org/gnome/Adwaita/icons");
+  if (!adw_is_granite_present ()) {
+    gtk_icon_theme_add_resource_path (gtk_icon_theme_get_for_display (gdk_display_get_default ()),
+                                      "/org/gnome/Adwaita/icons");
 
-  adw_style_manager_ensure ();
+    adw_style_manager_ensure ();
 
-  if (g_io_extension_point_lookup ("gtk-inspector-page"))
-    g_io_extension_point_implement ("gtk-inspector-page",
-                                    ADW_TYPE_INSPECTOR_PAGE,
-                                    "libadwaita",
-                                    10);
+    if (g_io_extension_point_lookup ("gtk-inspector-page"))
+      g_io_extension_point_implement ("gtk-inspector-page",
+                                      ADW_TYPE_INSPECTOR_PAGE,
+                                      "libadwaita",
+                                      10);
+  }
+
+  init_debug ();
 
   adw_initialized = TRUE;
 }
@@ -69,4 +88,28 @@ gboolean
 adw_is_initialized (void)
 {
   return adw_initialized;
+}
+
+/*
+ * Some applications, like Epiphany, are used on both GNOME and elementary.
+ * Make it possible to integrate those apps with it while still using libadwaita.
+ */
+gboolean
+adw_is_granite_present (void)
+{
+  static int present = -1;
+
+  if (present == -1) {
+    GType granite_settings = g_type_from_name ("GraniteSettings");
+
+    present = granite_settings != G_TYPE_INVALID;
+  }
+
+  return present;
+}
+
+gboolean
+adw_is_adaptive_preview (void)
+{
+  return adw_adaptive_preview;
 }

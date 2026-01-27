@@ -8,14 +8,13 @@
 
 #include "adw-preferences-page-private.h"
 
-#include "adw-macros-private.h"
 #include "adw-preferences-group-private.h"
 #include "adw-widget-utils-private.h"
 
 /**
  * AdwPreferencesPage:
  *
- * A page from [class@PreferencesWindow].
+ * A page from [class@PreferencesDialog].
  *
  * <picture>
  *   <source srcset="preferences-page-dark.png" media="(prefers-color-scheme: dark)">
@@ -32,13 +31,13 @@
  * ## Accessibility
  *
  * `AdwPreferencesPage` uses the `GTK_ACCESSIBLE_ROLE_GROUP` role.
- *
- * Since: 1.0
  */
 
 typedef struct
 {
+  GtkWidget *banner;
   GtkBox *box;
+  GtkLabel *description;
   GtkWidget *scrolled_window;
 
   char *icon_name;
@@ -62,12 +61,23 @@ enum {
   PROP_0,
   PROP_ICON_NAME,
   PROP_TITLE,
+  PROP_DESCRIPTION,
   PROP_NAME,
   PROP_USE_UNDERLINE,
+  PROP_DESCRIPTION_CENTERED,
+  PROP_BANNER,
   LAST_PROP,
 };
 
 static GParamSpec *props[LAST_PROP];
+
+static gboolean
+is_visible_group (GtkWidget *widget,
+                  gpointer   user_data)
+{
+  return ADW_IS_PREFERENCES_GROUP (widget) &&
+         gtk_widget_get_visible (widget);
+}
 
 static void
 adw_preferences_page_get_property (GObject    *object,
@@ -84,11 +94,20 @@ adw_preferences_page_get_property (GObject    *object,
   case PROP_TITLE:
     g_value_set_string (value, adw_preferences_page_get_title (self));
     break;
+  case PROP_DESCRIPTION:
+    g_value_set_string (value, adw_preferences_page_get_description (self));
+    break;
   case PROP_NAME:
     g_value_set_string (value, adw_preferences_page_get_name (self));
     break;
   case PROP_USE_UNDERLINE:
     g_value_set_boolean (value, adw_preferences_page_get_use_underline (self));
+    break;
+  case PROP_DESCRIPTION_CENTERED:
+    g_value_set_boolean (value, adw_preferences_page_get_description_centered (self));
+    break;
+  case PROP_BANNER:
+    g_value_set_object (value, adw_preferences_page_get_banner (self));
     break;
   default:
     G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -110,11 +129,20 @@ adw_preferences_page_set_property (GObject      *object,
   case PROP_TITLE:
     adw_preferences_page_set_title (self, g_value_get_string (value));
     break;
+  case PROP_DESCRIPTION:
+    adw_preferences_page_set_description (self, g_value_get_string (value));
+    break;
   case PROP_NAME:
     adw_preferences_page_set_name (self, g_value_get_string (value));
     break;
   case PROP_USE_UNDERLINE:
     adw_preferences_page_set_use_underline (self, g_value_get_boolean (value));
+    break;
+  case PROP_DESCRIPTION_CENTERED:
+    adw_preferences_page_set_description_centered (self, g_value_get_boolean (value));
+    break;
+  case PROP_BANNER:
+    adw_preferences_page_set_banner (self, g_value_get_object (value));
     break;
   default:
     G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -127,7 +155,9 @@ adw_preferences_page_dispose (GObject *object)
   AdwPreferencesPage *self = ADW_PREFERENCES_PAGE (object);
   AdwPreferencesPagePrivate *priv = adw_preferences_page_get_instance_private (self);
 
-  gtk_widget_unparent (priv->scrolled_window);
+  gtk_widget_dispose_template (GTK_WIDGET (object), ADW_TYPE_PREFERENCES_PAGE);
+
+  g_clear_pointer (&priv->banner, gtk_widget_unparent);
 
   G_OBJECT_CLASS (adw_preferences_page_parent_class)->dispose (object);
 }
@@ -157,13 +187,12 @@ adw_preferences_page_class_init (AdwPreferencesPageClass *klass)
   object_class->finalize = adw_preferences_page_finalize;
 
   widget_class->compute_expand = adw_widget_compute_expand;
+  widget_class->focus = adw_widget_focus_child;
 
   /**
-   * AdwPreferencesPage:icon-name: (attributes org.gtk.Property.get=adw_preferences_page_get_icon_name org.gtk.Property.set=adw_preferences_page_set_icon_name)
+   * AdwPreferencesPage:icon-name:
    *
    * The icon name for this page.
-   *
-   * Since: 1.0
    */
   props[PROP_ICON_NAME] =
     g_param_spec_string ("icon-name", NULL, NULL,
@@ -171,11 +200,9 @@ adw_preferences_page_class_init (AdwPreferencesPageClass *klass)
                          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
   /**
-   * AdwPreferencesPage:title: (attributes org.gtk.Property.get=adw_preferences_page_get_title org.gtk.Property.set=adw_preferences_page_set_title)
+   * AdwPreferencesPage:title:
    *
    * The title for this page.
-   *
-   * Since: 1.0
    */
   props[PROP_TITLE] =
     g_param_spec_string ("title", NULL, NULL,
@@ -183,11 +210,21 @@ adw_preferences_page_class_init (AdwPreferencesPageClass *klass)
                          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
   /**
-   * AdwPreferencesPage:name: (attributes org.gtk.Property.get=adw_preferences_page_get_name org.gtk.Property.set=adw_preferences_page_set_name)
+   * AdwPreferencesPage:description:
+   *
+   * The description to be displayed at the top of the page.
+   *
+   * Since: 1.4
+   */
+  props[PROP_DESCRIPTION] =
+    g_param_spec_string ("description", NULL, NULL,
+                         "",
+                         G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
+
+  /**
+   * AdwPreferencesPage:name:
    *
    * The name of this page.
-   *
-   * Since: 1.0
    */
   props[PROP_NAME] =
     g_param_spec_string ("name", NULL, NULL,
@@ -195,33 +232,60 @@ adw_preferences_page_class_init (AdwPreferencesPageClass *klass)
                          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
   /**
-   * AdwPreferencesPage:use-underline: (attributes org.gtk.Property.get=adw_preferences_page_get_use_underline org.gtk.Property.set=adw_preferences_page_set_use_underline)
+   * AdwPreferencesPage:use-underline:
    *
    * Whether an embedded underline in the title indicates a mnemonic.
-   *
-   * Since: 1.0
    */
   props[PROP_USE_UNDERLINE] =
     g_param_spec_boolean ("use-underline", NULL, NULL,
                           FALSE,
                           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
+  /**
+   * AdwPreferencesPage:description-centered:
+   *
+   * Whether the description should be centered.
+   *
+   * Since: 1.6
+   */
+  props[PROP_DESCRIPTION_CENTERED] =
+    g_param_spec_boolean ("description-centered", NULL, NULL,
+                          FALSE,
+                          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
+
+  /**
+   * AdwPreferencesPage:banner:
+   *
+   * A [class@Banner] displayed at the top of the page.
+   *
+   * Since: 1.7
+   */
+  props[PROP_BANNER] =
+    g_param_spec_object ("banner", NULL, NULL,
+                         ADW_TYPE_BANNER,
+                         G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
+
   g_object_class_install_properties (object_class, LAST_PROP, props);
 
   gtk_widget_class_set_template_from_resource (widget_class,
                                                "/org/gnome/Adwaita/ui/adw-preferences-page.ui");
   gtk_widget_class_bind_template_child_private (widget_class, AdwPreferencesPage, box);
+  gtk_widget_class_bind_template_child_private (widget_class, AdwPreferencesPage, description);
   gtk_widget_class_bind_template_child_private (widget_class, AdwPreferencesPage, scrolled_window);
 
   gtk_widget_class_set_css_name (widget_class, "preferencespage");
   gtk_widget_class_set_accessible_role (widget_class, GTK_ACCESSIBLE_ROLE_GROUP);
-  gtk_widget_class_set_layout_manager_type (widget_class, GTK_TYPE_BIN_LAYOUT);
+  gtk_widget_class_set_layout_manager_type (widget_class, GTK_TYPE_BOX_LAYOUT);
 }
 
 static void
 adw_preferences_page_init (AdwPreferencesPage *self)
 {
   AdwPreferencesPagePrivate *priv = adw_preferences_page_get_instance_private (self);
+  GtkLayoutManager *layout = gtk_widget_get_layout_manager (GTK_WIDGET (self));
+
+  gtk_orientable_set_orientation (GTK_ORIENTABLE (layout), GTK_ORIENTATION_VERTICAL);
+
   priv->title = g_strdup ("");
 
   gtk_widget_init_template (GTK_WIDGET (self));
@@ -255,8 +319,6 @@ adw_preferences_page_buildable_init (GtkBuildableIface *iface)
  * Creates a new `AdwPreferencesPage`.
  *
  * Returns: the newly created `AdwPreferencesPage`
- *
- * Since: 1.0
  */
 GtkWidget *
 adw_preferences_page_new (void)
@@ -270,8 +332,6 @@ adw_preferences_page_new (void)
  * @group: the group to add
  *
  * Adds a preferences group to @self.
- *
- * Since: 1.0
  */
 void
 adw_preferences_page_add (AdwPreferencesPage  *self,
@@ -293,8 +353,6 @@ adw_preferences_page_add (AdwPreferencesPage  *self,
  * @group: the group to remove
  *
  * Removes a group from @self.
- *
- * Since: 1.0
  */
 void
 adw_preferences_page_remove (AdwPreferencesPage  *self,
@@ -314,14 +372,12 @@ adw_preferences_page_remove (AdwPreferencesPage  *self,
 }
 
 /**
- * adw_preferences_page_get_icon_name: (attributes org.gtk.Method.get_property=icon-name)
+ * adw_preferences_page_get_icon_name:
  * @self: a preferences page
  *
  * Gets the icon name for @self.
  *
  * Returns: (nullable): the icon name for @self
- *
- * Since: 1.0
  */
 const char *
 adw_preferences_page_get_icon_name (AdwPreferencesPage *self)
@@ -336,13 +392,11 @@ adw_preferences_page_get_icon_name (AdwPreferencesPage *self)
 }
 
 /**
- * adw_preferences_page_set_icon_name: (attributes org.gtk.Method.set_property=icon-name)
+ * adw_preferences_page_set_icon_name:
  * @self: a preferences page
  * @icon_name: (nullable): the icon name
  *
  * Sets the icon name for @self.
- *
- * Since: 1.0
  */
 void
 adw_preferences_page_set_icon_name (AdwPreferencesPage *self,
@@ -354,24 +408,19 @@ adw_preferences_page_set_icon_name (AdwPreferencesPage *self,
 
   priv = adw_preferences_page_get_instance_private (self);
 
-  if (g_strcmp0 (priv->icon_name, icon_name) == 0)
+  if (!g_set_str (&priv->icon_name, icon_name))
     return;
-
-  g_clear_pointer (&priv->icon_name, g_free);
-  priv->icon_name = g_strdup (icon_name);
 
   g_object_notify_by_pspec (G_OBJECT (self), props[PROP_ICON_NAME]);
 }
 
 /**
- * adw_preferences_page_get_title: (attributes org.gtk.Method.get_property=title)
+ * adw_preferences_page_get_title:
  * @self: a preferences page
  *
  * Gets the title of @self.
  *
  * Returns: the title of @self.
- *
- * Since: 1.0
  */
 const char *
 adw_preferences_page_get_title (AdwPreferencesPage *self)
@@ -386,13 +435,11 @@ adw_preferences_page_get_title (AdwPreferencesPage *self)
 }
 
 /**
- * adw_preferences_page_set_title: (attributes org.gtk.Method.set_property=title)
+ * adw_preferences_page_set_title:
  * @self: a preferences page
  * @title: the title
  *
  * Sets the title of @self.
- *
- * Since: 1.0
  */
 void
 adw_preferences_page_set_title (AdwPreferencesPage *self,
@@ -404,24 +451,72 @@ adw_preferences_page_set_title (AdwPreferencesPage *self,
 
   priv = adw_preferences_page_get_instance_private (self);
 
-  if (g_strcmp0 (priv->title, title) == 0)
+  if (!g_set_str (&priv->title, title ? title : ""))
     return;
-
-  g_clear_pointer (&priv->title, g_free);
-  priv->title = g_strdup (title ? title : "");
 
   g_object_notify_by_pspec (G_OBJECT (self), props[PROP_TITLE]);
 }
 
 /**
- * adw_preferences_page_get_name: (attributes org.gtk.Method.get_property=name)
+ * adw_preferences_page_get_description:
+ * @self: a preferences page
+ *
+ * Gets the description of @self.
+ *
+ * Returns: the description of @self.
+ *
+ * Since: 1.4
+ */
+const char *
+adw_preferences_page_get_description (AdwPreferencesPage *self)
+{
+  AdwPreferencesPagePrivate *priv;
+
+  g_return_val_if_fail (ADW_IS_PREFERENCES_PAGE (self), NULL);
+
+  priv = adw_preferences_page_get_instance_private (self);
+
+  return gtk_label_get_text (priv->description);
+}
+
+/**
+ * adw_preferences_page_set_description:
+ * @self: a preferences page
+ * @description: the description
+ *
+ * Sets the description of @self.
+ *
+ * The description is displayed at the top of the page.
+ *
+ * Since: 1.4
+ */
+void
+adw_preferences_page_set_description (AdwPreferencesPage *self,
+                                      const char         *description)
+{
+  AdwPreferencesPagePrivate *priv;
+
+  g_return_if_fail (ADW_IS_PREFERENCES_PAGE (self));
+
+  priv = adw_preferences_page_get_instance_private (self);
+
+  if (g_strcmp0 (gtk_label_get_label (priv->description), description) == 0)
+    return;
+
+  gtk_label_set_label (priv->description, description);
+  gtk_widget_set_visible (GTK_WIDGET (priv->description),
+                          description && *description);
+
+  g_object_notify_by_pspec (G_OBJECT (self), props[PROP_DESCRIPTION]);
+}
+
+/**
+ * adw_preferences_page_get_name:
  * @self: a preferences page
  *
  * Gets the name of @self.
  *
  * Returns: (nullable): the name of @self
- *
- * Since: 1.0
  */
 const char *
 adw_preferences_page_get_name (AdwPreferencesPage *self)
@@ -436,13 +531,11 @@ adw_preferences_page_get_name (AdwPreferencesPage *self)
 }
 
 /**
- * adw_preferences_page_set_name: (attributes org.gtk.Method.set_property=name)
+ * adw_preferences_page_set_name:
  * @self: a preferences page
  * @name: (nullable): the name
  *
  * Sets the name of @self.
- *
- * Since: 1.0
  */
 void
 adw_preferences_page_set_name (AdwPreferencesPage *self,
@@ -454,24 +547,19 @@ adw_preferences_page_set_name (AdwPreferencesPage *self,
 
   priv = adw_preferences_page_get_instance_private (self);
 
-  if (g_strcmp0(priv->name, name) == 0)
+  if (!g_set_str (&priv->name, name))
     return;
-
-  g_clear_pointer (&priv->name, g_free);
-  priv->name = g_strdup (name);
 
   g_object_notify_by_pspec (G_OBJECT (self), props[PROP_NAME]);
 }
 
 /**
- * adw_preferences_page_get_use_underline: (attributes org.gtk.Method.get_property=use-underline)
+ * adw_preferences_page_get_use_underline:
  * @self: a preferences page
  *
  * Gets whether an embedded underline in the title indicates a mnemonic.
  *
  * Returns: whether an embedded underline in the title indicates a mnemonic
- *
- * Since: 1.0
  */
 gboolean
 adw_preferences_page_get_use_underline (AdwPreferencesPage *self)
@@ -486,13 +574,11 @@ adw_preferences_page_get_use_underline (AdwPreferencesPage *self)
 }
 
 /**
- * adw_preferences_page_set_use_underline: (attributes org.gtk.Method.set_property=use-underline)
+ * adw_preferences_page_set_use_underline:
  * @self: a preferences page
  * @use_underline: `TRUE` if underlines in the text indicate mnemonics
  *
  * Sets whether an embedded underline in the title indicates a mnemonic.
- *
- * Since: 1.0
  */
 void
 adw_preferences_page_set_use_underline (AdwPreferencesPage *self,
@@ -515,6 +601,129 @@ adw_preferences_page_set_use_underline (AdwPreferencesPage *self,
 }
 
 /**
+ * adw_preferences_page_get_description_centered:
+ * @self: a preferences page
+ *
+ * Gets whether the description is centered.
+ *
+ * Returns: whether the description is centered.
+ *
+ * Since: 1.6
+ */
+gboolean
+adw_preferences_page_get_description_centered (AdwPreferencesPage *self)
+{
+  AdwPreferencesPagePrivate *priv;
+
+  g_return_val_if_fail (ADW_IS_PREFERENCES_PAGE (self), FALSE);
+
+  priv = adw_preferences_page_get_instance_private (self);
+
+  return gtk_label_get_justify (priv->description) == GTK_JUSTIFY_CENTER;
+}
+
+/**
+ * adw_preferences_page_set_description_centered:
+ * @self: a preferences page
+ * @centered: If the description should be centered
+ *
+ * Sets whether the description should be centered.
+ *
+ * Since: 1.6
+ */
+void
+adw_preferences_page_set_description_centered (AdwPreferencesPage *self,
+                                               gboolean            centered)
+{
+  AdwPreferencesPagePrivate *priv;
+
+  g_return_if_fail (ADW_IS_PREFERENCES_PAGE (self));
+
+  priv = adw_preferences_page_get_instance_private (self);
+
+  centered = !!centered;
+
+  if (adw_preferences_page_get_description_centered (self) == centered)
+    return;
+
+  if (centered) {
+    gtk_label_set_justify (priv->description, GTK_JUSTIFY_CENTER);
+    gtk_label_set_xalign (priv->description, 0.5);
+  } else {
+    gtk_label_set_justify (priv->description, GTK_JUSTIFY_LEFT);
+    gtk_label_set_xalign (priv->description, 0);
+  }
+
+  g_object_notify_by_pspec (G_OBJECT (self), props[PROP_DESCRIPTION_CENTERED]);
+}
+
+/**
+ * adw_preferences_page_get_banner:
+ * @self: a preferences page
+ *
+ * Gets the banner displayed at the top of the page.
+ *
+ * Returns: (nullable) (transfer none): the banner for @self
+ *
+ * Since: 1.7
+ */
+AdwBanner *
+adw_preferences_page_get_banner (AdwPreferencesPage *self)
+{
+  AdwPreferencesPagePrivate *priv;
+
+  g_return_val_if_fail (ADW_IS_PREFERENCES_PAGE (self), NULL);
+
+  priv = adw_preferences_page_get_instance_private (self);
+
+  return ADW_BANNER (priv->banner);
+}
+
+/**
+ * adw_preferences_page_set_banner:
+ * @self: a preferences page
+ * @banner: (nullable): the banner to display at the top of the page
+ *
+ * Sets the banner displayed at the top of the page.
+ *
+ * Since: 1.7
+ */
+void
+adw_preferences_page_set_banner (AdwPreferencesPage *self,
+                                 AdwBanner          *banner)
+{
+  AdwPreferencesPagePrivate *priv;
+  GtkWidget *banner_widget;
+
+  g_return_if_fail (ADW_IS_PREFERENCES_PAGE (self));
+  g_return_if_fail (banner == NULL || ADW_IS_BANNER (banner));
+
+  priv = adw_preferences_page_get_instance_private (self);
+  banner_widget = GTK_WIDGET (banner);
+
+  if (priv->banner == banner_widget)
+    return;
+
+  if (priv->banner)
+    gtk_widget_unparent (priv->banner);
+
+  priv->banner = banner_widget;
+
+  if (priv->banner)
+    gtk_widget_insert_after (priv->banner, GTK_WIDGET (self), NULL);
+
+  g_object_notify_by_pspec (G_OBJECT (self), props[PROP_BANNER]);
+}
+
+static GListModel *
+preferences_group_to_rows (AdwPreferencesGroup *group)
+{
+  g_object_unref (group);
+
+  return adw_preferences_group_get_rows (group);
+}
+
+/**
  * adw_preferences_page_get_rows:
  * @self: a preferences page
  *
@@ -523,28 +732,48 @@ adw_preferences_page_set_use_underline (AdwPreferencesPage *self,
  * This can be used to keep an up-to-date view.
  *
  * Returns: (transfer full): a list model for the page's rows
- *
- * Since: 1.0
  */
 GListModel *
 adw_preferences_page_get_rows (AdwPreferencesPage *self)
 {
   AdwPreferencesPagePrivate *priv;
   GListModel *model;
-  GtkExpression *expr;
+  GtkCustomFilter *filter;
 
   g_return_val_if_fail (ADW_IS_PREFERENCES_PAGE (self), NULL);
 
   priv = adw_preferences_page_get_instance_private (self);
 
-  expr = gtk_property_expression_new (GTK_TYPE_WIDGET, NULL, "visible");
+  filter = gtk_custom_filter_new ((GtkCustomFilterFunc) is_visible_group, NULL, NULL);
 
   model = gtk_widget_observe_children (GTK_WIDGET (priv->box));
-  model = G_LIST_MODEL (gtk_filter_list_model_new (model, GTK_FILTER (gtk_bool_filter_new (expr))));
+  model = G_LIST_MODEL (gtk_filter_list_model_new (model, GTK_FILTER (filter)));
   model = G_LIST_MODEL (gtk_map_list_model_new (model,
-                                                (GtkMapListModelMapFunc) adw_preferences_group_get_rows,
+                                                (GtkMapListModelMapFunc) preferences_group_to_rows,
                                                 NULL,
                                                 NULL));
 
   return G_LIST_MODEL (gtk_flatten_list_model_new (model));
+}
+
+/**
+ * adw_preferences_page_scroll_to_top:
+ * @self: a preferences page
+ *
+ * Scrolls the scrolled window of @self to the top.
+ *
+ * Since: 1.3
+ */
+void
+adw_preferences_page_scroll_to_top (AdwPreferencesPage *self)
+{
+  AdwPreferencesPagePrivate *priv;
+  GtkAdjustment *adjustment;
+
+  g_return_if_fail (ADW_IS_PREFERENCES_PAGE (self));
+
+  priv = adw_preferences_page_get_instance_private (self);
+  adjustment = gtk_scrolled_window_get_vadjustment (GTK_SCROLLED_WINDOW (priv->scrolled_window));
+
+  gtk_adjustment_set_value (adjustment, gtk_adjustment_get_lower (adjustment));
 }

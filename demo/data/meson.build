@@ -10,15 +10,22 @@ desktop_file = i18n.merge_file(
 desktop_utils = find_program('desktop-file-validate', required: false)
 if desktop_utils.found()
   test('Validate desktop file', desktop_utils,
-    args: [desktop_file]
+    args: [desktop_file],
+    suite: ['demo'],
   )
 endif
 
 today = 'unknown'
 date = find_program('date',
          required: false)
+sh = find_program('sh')
 if date.found()
-  r = run_command(date, '-I')
+  time_epoch = run_command(sh, '-c', 'echo "$SOURCE_DATE_EPOCH"', check: true).stdout().strip()
+  if time_epoch != ''
+    r = run_command(date, '-I', '-u', '-d', '@' + time_epoch, check: false)
+  else
+    r = run_command(date, '-I', check: false)
+  endif
   if r.returncode() == 0
     today = r.stdout().strip()
   endif
@@ -28,25 +35,24 @@ appdata_config = configuration_data()
 appdata_config.set('BUILD_VERSION', meson.project_version())
 appdata_config.set('BUILD_DATE', today)
 
-if target_system != 'windows'
-  appstream_file = i18n.merge_file(
-    input: configure_file(
-      input: 'org.gnome.Adwaita1.Demo.metainfo.xml.in.in',
-      output: 'org.gnome.Adwaita1.Demo.metainfo.xml.in',
-      configuration: appdata_config
-    ),
-    output: 'org.gnome.Adwaita1.Demo.metainfo.xml',
-    po_dir: '../../po',
-    install: true,
-    install_dir: datadir / 'metainfo'
-  )
+appstream_file = i18n.merge_file(
+  input: configure_file(
+    input: 'org.gnome.Adwaita1.Demo.metainfo.xml.in.in',
+    output: 'org.gnome.Adwaita1.Demo.metainfo.xml.in',
+    configuration: appdata_config
+  ),
+  output: 'org.gnome.Adwaita1.Demo.metainfo.xml',
+  po_dir: '../../po',
+  install: true,
+  install_dir: datadir / 'metainfo'
+)
 
-  appstream_util = find_program('appstream-util', required: false)
-  if appstream_util.found()
-    test('Validate appstream file', appstream_util,
-      args: ['validate', '--nonet', appstream_file]
-    )
-  endif
+appstreamcli = find_program('appstreamcli', required: false)
+if appstreamcli.found()
+  test('Validate appstream file', appstreamcli,
+    args: ['validate', '--no-net', '--explain', appstream_file],
+    suite: ['demo'],
+  )
 endif
 
 install_data(

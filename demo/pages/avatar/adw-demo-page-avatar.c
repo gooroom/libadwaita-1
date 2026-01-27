@@ -12,7 +12,7 @@ struct _AdwDemoPageAvatar
   GtkListBox *contacts;
 };
 
-G_DEFINE_TYPE (AdwDemoPageAvatar, adw_demo_page_avatar, ADW_TYPE_BIN)
+G_DEFINE_FINAL_TYPE (AdwDemoPageAvatar, adw_demo_page_avatar, ADW_TYPE_BIN)
 
 static char *
 create_random_name (void)
@@ -84,12 +84,13 @@ populate_contacts (AdwDemoPageAvatar *self)
 }
 
 static void
-open_response_cb (AdwDemoPageAvatar *self,
-                  GtkResponseType    response,
-                  GtkFileChooser    *chooser)
+avatar_open_dialog_cb (GtkFileDialog     *dialog,
+                       GAsyncResult      *result,
+                       AdwDemoPageAvatar *self)
 {
-  if (response == GTK_RESPONSE_ACCEPT) {
-    GFile *file = gtk_file_chooser_get_file (chooser);
+  GFile *file = gtk_file_dialog_open_finish (dialog, result, NULL);
+
+  if (file) {
     GFileInfo *info;
     GdkTexture *texture;
     GError *error = NULL;
@@ -107,35 +108,32 @@ open_response_cb (AdwDemoPageAvatar *self,
     gtk_widget_action_set_enabled (GTK_WIDGET (self), "avatar.remove", TRUE);
 
     texture = gdk_texture_new_from_file (file, &error);
-    if (error)
+    if (error) {
       g_critical ("Failed to create texture from file: %s", error->message);
+      g_clear_error (&error);
+    }
 
     adw_avatar_set_custom_image (self->avatar, texture ? GDK_PAINTABLE (texture) : NULL);
 
-    g_clear_error (&error);
     g_clear_object (&info);
-    g_object_unref (texture);
+    g_clear_object (&texture);
     g_object_unref (file);
   }
-
-  gtk_native_dialog_destroy (GTK_NATIVE_DIALOG (chooser));
 }
 
 static void
 avatar_open_cb (AdwDemoPageAvatar *self)
 {
   GtkRoot *root = gtk_widget_get_root (GTK_WIDGET (self));
-  GtkFileChooserNative *chooser =
-    gtk_file_chooser_native_new (_("Select an Avatar"),
-                                 GTK_WINDOW (root),
-                                 GTK_FILE_CHOOSER_ACTION_OPEN,
-                                 _("_Select"),
-                                 _("_Cancel"));
-  gtk_native_dialog_set_modal (GTK_NATIVE_DIALOG (chooser), TRUE);
+  GtkFileDialog *dialog = gtk_file_dialog_new ();
 
-  g_signal_connect_swapped (chooser, "response", G_CALLBACK (open_response_cb), self);
+  gtk_file_dialog_set_title (dialog, _("Select an Avatar"));
 
-  gtk_native_dialog_show (GTK_NATIVE_DIALOG (chooser));
+  gtk_file_dialog_open (dialog,
+                        GTK_WINDOW (root),
+                        NULL,
+                        (GAsyncReadyCallback) avatar_open_dialog_cb,
+                        self);
 }
 
 static void
@@ -147,12 +145,13 @@ avatar_remove_cb (AdwDemoPageAvatar *self)
 }
 
 static void
-save_response_cb (AdwDemoPageAvatar *self,
-                  GtkResponseType    response,
-                  GtkFileChooser    *chooser)
+avatar_save_dialog_cb (GtkFileDialog     *dialog,
+                       GAsyncResult      *result,
+                       AdwDemoPageAvatar *self)
 {
-  if (response == GTK_RESPONSE_ACCEPT) {
-    GFile *file = gtk_file_chooser_get_file (chooser);
+  GFile *file = gtk_file_dialog_save_finish (dialog, result, NULL);
+
+  if (file) {
     GdkTexture *texture =
       adw_avatar_draw_to_texture (self->avatar,
                                   gtk_widget_get_scale_factor (GTK_WIDGET (self)));
@@ -162,25 +161,21 @@ save_response_cb (AdwDemoPageAvatar *self,
     g_object_unref (texture);
     g_object_unref (file);
   }
-
-  gtk_native_dialog_destroy (GTK_NATIVE_DIALOG (chooser));
 }
 
 static void
 avatar_save_cb (AdwDemoPageAvatar *self)
 {
   GtkRoot *root = gtk_widget_get_root (GTK_WIDGET (self));
-  GtkFileChooserNative *chooser =
-    gtk_file_chooser_native_new (_("Save Avatar"),
-                                 GTK_WINDOW (root),
-                                 GTK_FILE_CHOOSER_ACTION_SAVE,
-                                 _("_Save"),
-                                 _("_Cancel"));
-  gtk_native_dialog_set_modal (GTK_NATIVE_DIALOG (chooser), TRUE);
+  GtkFileDialog *dialog = gtk_file_dialog_new ();
 
-  g_signal_connect_swapped (chooser, "response", G_CALLBACK (save_response_cb), self);
+  gtk_file_dialog_set_title (dialog, _("Save Avatar"));
 
-  gtk_native_dialog_show (GTK_NATIVE_DIALOG (chooser));
+  gtk_file_dialog_save (dialog,
+                        GTK_WINDOW (root),
+                        NULL,
+                        (GAsyncReadyCallback) avatar_save_dialog_cb,
+                        self);
 }
 
 static void

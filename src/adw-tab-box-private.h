@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
  *
- * Author: Alexander Mikhaylenko <alexander.mikhaylenko@puri.sm>
+ * Author: Alice Mikhaylenko <alice.mikhaylenko@puri.sm>
  */
 
 #pragma once
@@ -40,6 +40,10 @@ void adw_tab_box_setup_extra_drop_target (AdwTabBox     *self,
                                           GdkDragAction  actions,
                                           GType         *types,
                                           gsize          n_types);
+
+gboolean adw_tab_box_get_extra_drag_preload (AdwTabBox *self);
+void     adw_tab_box_set_extra_drag_preload (AdwTabBox *self,
+                                             gboolean   preload);
 
 gboolean adw_tab_box_get_expand_tabs (AdwTabBox *self);
 void     adw_tab_box_set_expand_tabs (AdwTabBox *self,

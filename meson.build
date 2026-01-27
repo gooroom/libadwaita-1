@@ -1,7 +1,7 @@
 project('libadwaita', 'c',
-          version: '1.2.2',
+          version: '1.7.6',
           license: 'LGPL-2.1-or-later',
-    meson_version: '>= 0.59.0',
+    meson_version: '>= 0.63.0',
   default_options: [ 'warning_level=1', 'buildtype=debugoptimized', 'c_std=gnu11' ],
 )
 
@@ -29,7 +29,7 @@ package_api_name = '@0@-@1@'.format(meson.project_name(), apiversion)
 # to 0. When bumping the second version, set the third one to zero.
 #
 # A lot easier than libtool, right?
-libversion = '0.2.2'
+libversion = '0.7.6'
 # The so major version of the library
 soversion = 0
 
@@ -47,6 +47,15 @@ global_c_args = []
 test_c_args = []
 
 target_system = target_machine.system()
+
+has_winrt = target_system == 'windows' \
+  and cc.check_header('roapi.h') \
+  and cc.check_header('Windows.Foundation.h') \
+  and cc.check_header('Windows.UI.ViewManagement.h')
+
+if has_winrt
+  add_project_arguments(['-DHAS_WINRT'], language: 'c')
+endif
 
 if cc.get_id() != 'msvc'
   test_c_args += [
@@ -83,6 +92,7 @@ if cc.get_id() != 'msvc'
     '-Wtype-limits',
     '-Wundef',
     '-Wunused-function',
+    '-Wfloat-equal',
   ]
 
   if get_option('buildtype') != 'plain'
@@ -145,15 +155,11 @@ configure_file(
          output: 'run',
   configuration: run_data)
 
-if not meson.is_subproject()
-    meson.add_dist_script('build-aux'/ 'meson'/ 'dist-data.py')
-endif
-
 summary(
   {
     'Tests': get_option('tests'),
     'Examples': get_option('examples'),
-    'Documentation': get_option('gtk_doc'),
+    'Documentation': get_option('documentation'),
     'Introspection': introspection,
     'Vapi': get_option('vapi'),
   }, section: 'Options')

@@ -37,11 +37,14 @@ struct _AdwExpanderRowClass
 ADW_AVAILABLE_IN_ALL
 GtkWidget *adw_expander_row_new (void) G_GNUC_WARN_UNUSED_RESULT;
 
-ADW_AVAILABLE_IN_ALL
+ADW_DEPRECATED_IN_1_4_FOR (adw_expander_row_add_suffix)
 void adw_expander_row_add_action (AdwExpanderRow *self,
                                   GtkWidget      *widget);
 ADW_AVAILABLE_IN_ALL
 void adw_expander_row_add_prefix (AdwExpanderRow *self,
+                                  GtkWidget      *widget);
+ADW_AVAILABLE_IN_1_4
+void adw_expander_row_add_suffix (AdwExpanderRow *self,
                                   GtkWidget      *widget);
 
 ADW_AVAILABLE_IN_ALL
@@ -57,9 +60,9 @@ ADW_AVAILABLE_IN_ALL
 void        adw_expander_row_set_subtitle (AdwExpanderRow *self,
                                            const char     *subtitle);
 
-ADW_AVAILABLE_IN_ALL
+ADW_DEPRECATED_IN_1_3_FOR (adw_expander_row_add_prefix)
 const char *adw_expander_row_get_icon_name (AdwExpanderRow *self);
-ADW_AVAILABLE_IN_ALL
+ADW_DEPRECATED_IN_1_3_FOR (adw_expander_row_add_prefix)
 void        adw_expander_row_set_icon_name (AdwExpanderRow *self,
                                             const char     *icon_name);
 
@@ -80,5 +83,17 @@ gboolean adw_expander_row_get_show_enable_switch (AdwExpanderRow *self);
 ADW_AVAILABLE_IN_ALL
 void     adw_expander_row_set_show_enable_switch (AdwExpanderRow *self,
                                                   gboolean        show_enable_switch);
+
+ADW_AVAILABLE_IN_1_3
+int  adw_expander_row_get_title_lines (AdwExpanderRow *self);
+ADW_AVAILABLE_IN_1_3
+void adw_expander_row_set_title_lines (AdwExpanderRow *self,
+                                       int             title_lines);
+
+ADW_AVAILABLE_IN_1_3
+int  adw_expander_row_get_subtitle_lines (AdwExpanderRow *self);
+ADW_AVAILABLE_IN_1_3
+void adw_expander_row_set_subtitle_lines (AdwExpanderRow *self,
+                                          int             subtitle_lines);
 
 G_END_DECLS

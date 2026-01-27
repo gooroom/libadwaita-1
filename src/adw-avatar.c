@@ -12,10 +12,10 @@
 
 #include "config.h"
 #include <math.h>
+#include <glib/gi18n.h>
 
 #include "adw-avatar.h"
 #include "adw-gizmo-private.h"
-#include "adw-macros-private.h"
 
 #define NUMBER_OF_COLORS 14
 
@@ -46,7 +46,9 @@
  *
  * `AdwAvatar` has a single CSS node with name `avatar`.
  *
- * Since: 1.0
+ * ## Accessibility
+ *
+ * `AdwAvatar` uses the `GTK_ACCESSIBLE_ROLE_IMG` role.
  */
 
 struct _AdwAvatar
@@ -108,7 +110,7 @@ extract_initials_from_text (const char *text)
 
   g_free (normalized);
 
-  return g_string_free (initials, FALSE);
+  return g_string_free_and_steal (initials);
 }
 
 static void
@@ -153,10 +155,26 @@ update_initials (AdwAvatar *self)
 {
   char *initials;
 
+ if (self->text && *self->text) {
+    char *accessible_label = g_strdup_printf (_("Avatar of %s"), self->text);
+
+    gtk_accessible_update_property (GTK_ACCESSIBLE (self),
+                                    GTK_ACCESSIBLE_PROPERTY_LABEL,
+                                    accessible_label,
+                                    -1);
+
+    g_free (accessible_label);
+  } else {
+    gtk_accessible_update_property (GTK_ACCESSIBLE (self),
+                                    GTK_ACCESSIBLE_PROPERTY_LABEL,
+                                    NULL,
+                                    -1);
+  }
+
   if (gtk_image_get_paintable (self->custom_image) != NULL ||
       !self->show_initials ||
-      self->text == NULL ||
-      strlen (self->text) == 0)
+      !self->text ||
+      !*self->text)
     return;
 
   initials = extract_initials_from_text (self->text);
@@ -216,14 +234,54 @@ update_font_size (AdwAvatar *self)
 static void
 update_custom_image_snapshot (AdwAvatar *self)
 {
-  GtkSnapshot *snapshot = gtk_snapshot_new ();
+  GtkSnapshot *snapshot = NULL;
   GdkPaintable *square_image;
-  int height = gdk_paintable_get_intrinsic_height (self->custom_image_source);
-  int width = gdk_paintable_get_intrinsic_width (self->custom_image_source);
-  int size = MIN (width, height);
+  int width, height;
+  float scaled_width, scaled_height;
+  float size;
 
-  gtk_snapshot_translate (snapshot, &GRAPHENE_POINT_INIT ((size - width) / 2.f, (size - height) / 2.f));
-  gdk_paintable_snapshot (self->custom_image_source, snapshot, width, height);
+  if (!self->custom_image_source)
+    return;
+
+  width = gdk_paintable_get_intrinsic_width (self->custom_image_source);
+  height = gdk_paintable_get_intrinsic_height (self->custom_image_source);
+
+  if (height == width && !GDK_IS_TEXTURE (self->custom_image_source)) {
+    gtk_image_set_from_paintable (self->custom_image, self->custom_image_source);
+    return;
+  }
+
+  size = self->size * gtk_widget_get_scale_factor (GTK_WIDGET (self));
+
+  if (width > height) {
+    scaled_height = size;
+    scaled_width = (float) width * scaled_height / (float) height;
+  } else if (width < height) {
+    scaled_width = size;
+    scaled_height = (float) height * scaled_width / (float) width;
+  } else {
+    scaled_width = scaled_height = size;
+  }
+
+  snapshot = gtk_snapshot_new ();
+  gtk_snapshot_translate (snapshot, &GRAPHENE_POINT_INIT ((size - scaled_width) / 2.f, (size - scaled_height) / 2.f));
+
+  if (GDK_IS_TEXTURE (self->custom_image_source)) {
+    GskScalingFilter filter;
+
+    if (scaled_width > width || scaled_height > height)
+      filter = GSK_SCALING_FILTER_NEAREST;
+    else
+      filter = GSK_SCALING_FILTER_TRILINEAR;
+
+    gtk_snapshot_append_scaled_texture (snapshot,
+                                        GDK_TEXTURE (self->custom_image_source),
+                                        filter,
+                                        &GRAPHENE_RECT_INIT (0, 0, scaled_width, scaled_height));
+
+  } else {
+    gdk_paintable_snapshot (self->custom_image_source, snapshot, scaled_width, scaled_height);
+  }
 
   square_image = gtk_snapshot_free_to_paintable (snapshot, &GRAPHENE_SIZE_INIT (size, size));
   gtk_image_set_from_paintable (self->custom_image, square_image);
@@ -339,13 +397,11 @@ adw_avatar_class_init (AdwAvatarClass *klass)
   object_class->get_property = adw_avatar_get_property;
 
   /**
-   * AdwAvatar:icon-name: (attributes org.gtk.Property.get=adw_avatar_get_icon_name org.gtk.Property.set=adw_avatar_set_icon_name)
+   * AdwAvatar:icon-name:
    *
    * The name of an icon to use as a fallback.
    *
    * If no name is set, `avatar-default-symbolic` will be used.
-   *
-   * Since: 1.0
    */
   props[PROP_ICON_NAME] =
     g_param_spec_string ("icon-name", NULL, NULL,
@@ -353,14 +409,12 @@ adw_avatar_class_init (AdwAvatarClass *klass)
                          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
   /**
-   * AdwAvatar:text: (attributes org.gtk.Property.get=adw_avatar_get_text org.gtk.Property.set=adw_avatar_set_text)
+   * AdwAvatar:text:
    *
    * Sets the text used to generate the fallback initials and color.
    *
    * It's only used to generate the color if [property@Avatar:show-initials] is
    * `FALSE`.
-   *
-   * Since: 1.0
    */
   props[PROP_TEXT] =
     g_param_spec_string ("text", NULL, NULL,
@@ -368,13 +422,11 @@ adw_avatar_class_init (AdwAvatarClass *klass)
                          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
   /**
-   * AdwAvatar:show-initials: (attributes org.gtk.Property.get=adw_avatar_get_show_initials org.gtk.Property.set=adw_avatar_set_show_initials)
+   * AdwAvatar:show-initials:
    *
    * Whether initials are used instead of an icon on the fallback avatar.
    *
    * See [property@Avatar:icon-name] for how to change the fallback icon.
-   *
-   * Since: 1.0
    */
   props[PROP_SHOW_INITIALS] =
     g_param_spec_boolean ("show-initials", NULL, NULL,
@@ -382,13 +434,11 @@ adw_avatar_class_init (AdwAvatarClass *klass)
                           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
   /**
-   * AdwAvatar:custom-image: (attributes org.gtk.Property.get=adw_avatar_get_custom_image org.gtk.Property.set=adw_avatar_set_custom_image)
+   * AdwAvatar:custom-image:
    *
    * A custom image paintable.
    *
    * Custom image is displayed instead of initials or icon.
-   *
-   * Since: 1.0
    */
   props[PROP_CUSTOM_IMAGE] =
     g_param_spec_object ("custom-image", NULL, NULL,
@@ -396,11 +446,9 @@ adw_avatar_class_init (AdwAvatarClass *klass)
                          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
   /**
-   * AdwAvatar:size: (attributes org.gtk.Property.get=adw_avatar_get_size org.gtk.Property.set=adw_avatar_set_size)
+   * AdwAvatar:size:
    *
    * The size of the avatar.
-   *
-   * Since: 1.0
    */
   props[PROP_SIZE] =
     g_param_spec_int ("size", NULL, NULL,
@@ -410,28 +458,37 @@ adw_avatar_class_init (AdwAvatarClass *klass)
   g_object_class_install_properties (object_class, PROP_LAST_PROP, props);
 
   gtk_widget_class_set_layout_manager_type (widget_class, GTK_TYPE_BIN_LAYOUT);
+  gtk_widget_class_set_accessible_role (widget_class, GTK_ACCESSIBLE_ROLE_IMG);
 }
 
 static void
 adw_avatar_init (AdwAvatar *self)
 {
-  self->gizmo = adw_gizmo_new ("avatar", NULL, NULL, NULL, NULL, NULL, NULL);
+  self->gizmo = adw_gizmo_new_with_role ("avatar", GTK_ACCESSIBLE_ROLE_PRESENTATION,
+                                         NULL, NULL, NULL, NULL, NULL, NULL);
   gtk_widget_set_overflow (self->gizmo, GTK_OVERFLOW_HIDDEN);
   gtk_widget_set_halign (self->gizmo, GTK_ALIGN_CENTER);
   gtk_widget_set_valign (self->gizmo, GTK_ALIGN_CENTER);
   gtk_widget_set_layout_manager (self->gizmo, gtk_bin_layout_new ());
   gtk_widget_set_parent (self->gizmo, GTK_WIDGET (self));
 
-  self->label = GTK_LABEL (gtk_label_new (NULL));
+  self->label = g_object_new (GTK_TYPE_LABEL,
+                              "accessible-role", GTK_ACCESSIBLE_ROLE_PRESENTATION,
+                              NULL);
   gtk_widget_set_parent (GTK_WIDGET (self->label), self->gizmo);
 
-  self->icon = GTK_IMAGE (gtk_image_new ());
+  self->icon = g_object_new (GTK_TYPE_IMAGE,
+                             "accessible-role", GTK_ACCESSIBLE_ROLE_PRESENTATION,
+                             NULL);
   gtk_widget_set_parent (GTK_WIDGET (self->icon), self->gizmo);
 
-  self->custom_image = GTK_IMAGE (gtk_image_new ());
+  self->custom_image = g_object_new (GTK_TYPE_IMAGE,
+                                     "accessible-role", GTK_ACCESSIBLE_ROLE_PRESENTATION,
+                                     NULL);
   gtk_widget_set_parent (GTK_WIDGET (self->custom_image), self->gizmo);
 
   self->text = g_strdup ("");
+  self->size = -1;
 
   set_class_color (self);
   update_initials (self);
@@ -440,6 +497,7 @@ adw_avatar_init (AdwAvatar *self)
   update_visibility (self);
 
   g_signal_connect (self, "notify::root", G_CALLBACK (update_font_size), NULL);
+  g_signal_connect (self, "notify::scale-factor", G_CALLBACK (update_custom_image_snapshot), NULL);
 }
 
 /**
@@ -451,8 +509,6 @@ adw_avatar_init (AdwAvatar *self)
  * Creates a new `AdwAvatar`.
  *
  * Returns: the newly created `AdwAvatar`
- *
- * Since: 1.0
  */
 GtkWidget *
 adw_avatar_new (int         size,
@@ -467,14 +523,12 @@ adw_avatar_new (int         size,
 }
 
 /**
- * adw_avatar_get_icon_name: (attributes org.gtk.Method.get_property=icon-name)
+ * adw_avatar_get_icon_name:
  * @self: an avatar
  *
  * Gets the name of an icon to use as a fallback.
  *
  * Returns: (nullable): the icon name
- *
- * Since: 1.0
  */
 const char *
 adw_avatar_get_icon_name (AdwAvatar *self)
@@ -485,15 +539,13 @@ adw_avatar_get_icon_name (AdwAvatar *self)
 }
 
 /**
- * adw_avatar_set_icon_name: (attributes org.gtk.Method.set_property=icon-name)
+ * adw_avatar_set_icon_name:
  * @self: an avatar
  * @icon_name: (nullable): the icon name
  *
  * Sets the name of an icon to use as a fallback.
  *
  * If no name is set, `avatar-default-symbolic` will be used.
- *
- * Since: 1.0
  */
 void
 adw_avatar_set_icon_name (AdwAvatar  *self,
@@ -501,11 +553,8 @@ adw_avatar_set_icon_name (AdwAvatar  *self,
 {
   g_return_if_fail (ADW_IS_AVATAR (self));
 
-  if (g_strcmp0 (self->icon_name, icon_name) == 0)
+  if (!g_set_str (&self->icon_name, icon_name))
     return;
-
-  g_clear_pointer (&self->icon_name, g_free);
-  self->icon_name = g_strdup (icon_name);
 
   update_icon (self);
 
@@ -513,15 +562,13 @@ adw_avatar_set_icon_name (AdwAvatar  *self,
 }
 
 /**
- * adw_avatar_get_text: (attributes org.gtk.Method.get_property=text)
+ * adw_avatar_get_text:
  * @self: an avatar
  *
  * Gets the text used to generate the fallback initials and color.
  *
  * Returns: (nullable): the text used to generate the fallback initials and
  *   color
- *
- * Since: 1.0
  */
 const char *
 adw_avatar_get_text (AdwAvatar *self)
@@ -532,7 +579,7 @@ adw_avatar_get_text (AdwAvatar *self)
 }
 
 /**
- * adw_avatar_set_text: (attributes org.gtk.Method.set_property=text)
+ * adw_avatar_set_text:
  * @self: an avatar
  * @text: (nullable): the text used to get the initials and color
  *
@@ -540,8 +587,6 @@ adw_avatar_get_text (AdwAvatar *self)
  *
  * It's only used to generate the color if [property@Avatar:show-initials] is
  * `FALSE`.
- *
- * Since: 1.0
  */
 void
 adw_avatar_set_text (AdwAvatar  *self,
@@ -549,11 +594,8 @@ adw_avatar_set_text (AdwAvatar  *self,
 {
   g_return_if_fail (ADW_IS_AVATAR (self));
 
-  if (g_strcmp0 (self->text, text) == 0)
+  if (!g_set_str (&self->text, text ? text : ""))
     return;
-
-  g_clear_pointer (&self->text, g_free);
-  self->text = g_strdup (text ? text : "");
 
   set_class_color (self);
 
@@ -565,14 +607,12 @@ adw_avatar_set_text (AdwAvatar  *self,
 }
 
 /**
- * adw_avatar_get_show_initials: (attributes org.gtk.Method.get_property=show-initials)
+ * adw_avatar_get_show_initials:
  * @self: an avatar
  *
  * Gets whether initials are used instead of an icon on the fallback avatar.
  *
  * Returns: whether initials are used instead of an icon as fallback
- *
- * Since: 1.0
  */
 gboolean
 adw_avatar_get_show_initials (AdwAvatar *self)
@@ -583,15 +623,13 @@ adw_avatar_get_show_initials (AdwAvatar *self)
 }
 
 /**
- * adw_avatar_set_show_initials: (attributes org.gtk.Method.set_property=show-initials)
+ * adw_avatar_set_show_initials:
  * @self: an avatar
  * @show_initials: whether to use initials instead of an icon as fallback
  *
  * Sets whether to use initials instead of an icon on the fallback avatar.
  *
  * See [property@Avatar:icon-name] for how to change the fallback icon.
- *
- * Since: 1.0
  */
 void
 adw_avatar_set_show_initials (AdwAvatar *self,
@@ -612,14 +650,12 @@ adw_avatar_set_show_initials (AdwAvatar *self,
 }
 
 /**
- * adw_avatar_get_custom_image: (attributes org.gtk.Method.get_property=custom-image)
+ * adw_avatar_get_custom_image:
  * @self: an avatar
  *
  * Gets the custom image paintable.
  *
  * Returns: (nullable) (transfer none): the custom image
- *
- * Since: 1.0
  */
 GdkPaintable *
 adw_avatar_get_custom_image (AdwAvatar *self)
@@ -630,15 +666,13 @@ adw_avatar_get_custom_image (AdwAvatar *self)
 }
 
 /**
- * adw_avatar_set_custom_image: (attributes org.gtk.Method.set_property=custom-image)
+ * adw_avatar_set_custom_image:
  * @self: an avatar
  * @custom_image: (nullable) (transfer none): a custom image
  *
  * Sets the custom image paintable.
  *
  * Custom image is displayed instead of initials or icon.
- *
- * Since: 1.0
  */
 void
 adw_avatar_set_custom_image (AdwAvatar    *self,
@@ -661,10 +695,9 @@ adw_avatar_set_custom_image (AdwAvatar    *self,
     int height = gdk_paintable_get_intrinsic_height (custom_image);
     int width = gdk_paintable_get_intrinsic_width (custom_image);
 
-    if (height == width) {
-      gtk_image_set_from_paintable (self->custom_image, custom_image);
-    } else {
-      update_custom_image_snapshot (self);
+    update_custom_image_snapshot (self);
+
+    if (height != width && !GDK_IS_TEXTURE (custom_image)) {
       g_signal_connect_swapped (custom_image, "invalidate-contents",
                                 G_CALLBACK (update_custom_image_snapshot),
                                 self);
@@ -683,14 +716,12 @@ adw_avatar_set_custom_image (AdwAvatar    *self,
 }
 
 /**
- * adw_avatar_get_size: (attributes org.gtk.Method.get_property=size)
+ * adw_avatar_get_size:
  * @self: an avatar
  *
  * Gets the size of the avatar.
  *
  * Returns: the size of the avatar
- *
- * Since: 1.0
  */
 int
 adw_avatar_get_size (AdwAvatar *self)
@@ -701,13 +732,11 @@ adw_avatar_get_size (AdwAvatar *self)
 }
 
 /**
- * adw_avatar_set_size: (attributes org.gtk.Method.set_property=size)
+ * adw_avatar_set_size:
  * @self: an avatar
  * @size: The size of the avatar
  *
  * Sets the size of the avatar.
- *
- * Since: 1.0
  */
 void
 adw_avatar_set_size (AdwAvatar *self,
@@ -723,6 +752,7 @@ adw_avatar_set_size (AdwAvatar *self,
 
   gtk_widget_set_size_request (self->gizmo, size, size);
   gtk_image_set_pixel_size (self->icon, size / 2);
+  gtk_image_set_pixel_size (self->custom_image, size);
 
   if (size < 25)
     gtk_widget_add_css_class (self->gizmo, "contrasted");
@@ -730,6 +760,7 @@ adw_avatar_set_size (AdwAvatar *self,
     gtk_widget_remove_css_class (self->gizmo, "contrasted");
 
   update_font_size (self);
+  update_custom_image_snapshot (self);
 
   gtk_widget_queue_resize (GTK_WIDGET (self));
   g_object_notify_by_pspec (G_OBJECT (self), props[PROP_SIZE]);
@@ -745,8 +776,6 @@ adw_avatar_set_size (AdwAvatar *self,
  * This can be used to export the fallback avatar.
  *
  * Returns: (transfer full): the texture
- *
- * Since: 1.0
  */
 GdkTexture *
 adw_avatar_draw_to_texture (AdwAvatar *self,

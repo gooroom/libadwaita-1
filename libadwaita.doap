@@ -15,6 +15,7 @@
   </description>
   <homepage rdf:resource="https://gitlab.gnome.org/GNOME/libadwaita" />
   <license rdf:resource="http://usefulinc.com/doap/licenses/lgpl" />
+  <developer-forum rdf:resource="https://discourse.gnome.org/tag/libadwaita" />
 
   <programming-language>C</programming-language>
 
@@ -27,9 +28,9 @@
   </maintainer>
   <maintainer>
     <foaf:Person>
-      <foaf:name>Alexander Mikhaylenko</foaf:name>
-      <foaf:mbox rdf:resource="mailto:alexm@gnome.org" />
-      <gnome:userid>alexm</gnome:userid>
+      <foaf:name>Alice Mikhaylenko</foaf:name>
+      <foaf:mbox rdf:resource="mailto:alicem@gnome.org" />
+      <gnome:userid>alicem</gnome:userid>
     </foaf:Person>
   </maintainer>
   <maintainer>

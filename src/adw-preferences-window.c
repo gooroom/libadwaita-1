@@ -11,14 +11,17 @@
 
 #include "adw-animation-util.h"
 #include "adw-action-row.h"
+#include "adw-breakpoint-bin.h"
 #include "adw-leaflet.h"
-#include "adw-macros-private.h"
+#include "adw-navigation-view.h"
 #include "adw-preferences-group-private.h"
 #include "adw-preferences-page-private.h"
 #include "adw-toast-overlay.h"
-#include "adw-view-switcher.h"
-#include "adw-view-switcher-bar.h"
-#include "adw-view-switcher-title.h"
+#include "adw-view-stack.h"
+#include "adw-widget-utils-private.h"
+
+#define VIEW_SWITCHER_PAGE_THRESHOLD 110
+#define VIEW_SWITCHER_FALLBACK_THRESHOLD 400
 
 /**
  * AdwPreferencesWindow:
@@ -38,14 +41,14 @@
  * `AdwPreferencesWindow` has a main CSS node with the name `window` and the
  * style class `.preferences`.
  *
- * Since: 1.0
+ * Deprecated: 1.6: Use [class@PreferencesDialog].
  */
 
 typedef struct
 {
   AdwToastOverlay *toast_overlay;
-  AdwLeaflet *subpages_leaflet;
-  GtkWidget *preferences;
+  AdwNavigationView *subpages_nav_view;
+  GtkWidget *breakpoint_bin;
   GtkStack *content_stack;
   AdwViewStack *pages_stack;
   GtkToggleButton *search_button;
@@ -53,15 +56,21 @@ typedef struct
   GtkListBox *search_results;
   GtkStack *search_stack;
   GtkStack *title_stack;
-  AdwViewSwitcherBar *view_switcher_bar;
-  AdwViewSwitcherTitle *view_switcher_title;
+  GtkWidget *view_switcher_stack;
+  GtkWidget *view_switcher;
+  GtkWidget *title;
+  AdwBreakpoint *breakpoint;
 
   gboolean search_enabled;
   gboolean can_navigate_back;
 
-  GtkFilter *filter;
+  GtkFilter *row_filter;
+  GtkFilter *page_filter;
   GtkFilterListModel *filter_model;
 
+  int n_pages;
+
+  AdwLeaflet *subpages_leaflet;
   GtkWidget *subpage;
 } AdwPreferencesWindowPrivate;
 
@@ -85,50 +94,6 @@ enum {
 
 static GParamSpec *props[LAST_PROP];
 
-/* Copied and modified from gtklabel.c, separate_uline_pattern() */
-static char *
-strip_mnemonic (const char *src)
-{
-  char *new_str = g_new (char, strlen (src) + 1);
-  char *dest = new_str;
-  gboolean underscore = FALSE;
-
-  while (*src) {
-    gunichar c;
-    const char *next_src;
-
-    c = g_utf8_get_char (src);
-    if (c == (gunichar) -1) {
-      g_warning ("Invalid input string");
-
-      g_free (new_str);
-
-      return NULL;
-    }
-
-    next_src = g_utf8_next_char (src);
-
-    if (underscore) {
-      while (src < next_src)
-        *dest++ = *src++;
-
-      underscore = FALSE;
-    } else {
-      if (c == '_'){
-        underscore = TRUE;
-        src = next_src;
-      } else {
-        while (src < next_src)
-          *dest++ = *src++;
-      }
-    }
-  }
-
-  *dest = 0;
-
-  return new_str;
-}
-
 static char *
 make_comparable (const char        *src,
                  AdwPreferencesRow *row,
@@ -150,7 +115,7 @@ make_comparable (const char        *src,
   }
 
   if (allow_underline && adw_preferences_row_get_use_underline (row)) {
-    char *comparable = strip_mnemonic (plaintext);
+    char *comparable = adw_strip_mnemonic (plaintext);
     g_free (plaintext);
     return comparable;
   }
@@ -207,15 +172,15 @@ get_n_pages (AdwPreferencesWindow *self)
   return count;
 }
 
-static gchar *
+static char *
 create_search_row_subtitle (AdwPreferencesWindow *self,
-                            GtkWidget            *row)
+                            AdwPreferencesRow    *row)
 {
   GtkWidget *group, *page;
   const char *group_title = NULL;
   char *page_title = NULL;
 
-  group = gtk_widget_get_ancestor (row, ADW_TYPE_PREFERENCES_GROUP);
+  group = gtk_widget_get_ancestor (GTK_WIDGET (row), ADW_TYPE_PREFERENCES_GROUP);
 
   if (group) {
     group_title = adw_preferences_group_get_title (ADW_PREFERENCES_GROUP (group));
@@ -230,9 +195,17 @@ create_search_row_subtitle (AdwPreferencesWindow *self,
     const char *title = adw_preferences_page_get_title (ADW_PREFERENCES_PAGE (page));
 
     if (adw_preferences_page_get_use_underline (ADW_PREFERENCES_PAGE (page)))
-      page_title = strip_mnemonic (title);
+      page_title = adw_strip_mnemonic (title);
     else
       page_title = g_strdup (title);
+
+    if (adw_preferences_row_get_use_markup (row)) {
+      char *tmp = page_title;
+
+      page_title = g_markup_escape_text (page_title, -1);
+
+      g_free (tmp);
+    }
 
     if (g_strcmp0 (page_title, "") == 0)
       g_clear_pointer (&page_title, g_free);
@@ -264,13 +237,17 @@ new_search_row_for_preference (AdwPreferencesRow    *row,
 
   g_assert (ADW_IS_PREFERENCES_ROW (row));
 
-  subtitle = create_search_row_subtitle (self, GTK_WIDGET (row));
+  subtitle = create_search_row_subtitle (self, row);
   page = gtk_widget_get_ancestor (GTK_WIDGET (row), ADW_TYPE_PREFERENCES_PAGE);
 
   widget = ADW_ACTION_ROW (adw_action_row_new ());
   gtk_list_box_row_set_activatable (GTK_LIST_BOX_ROW (widget), TRUE);
-  g_object_bind_property (row, "title", widget, "title", G_BINDING_SYNC_CREATE);
-  g_object_bind_property (row, "use-underline", widget, "use-underline", G_BINDING_SYNC_CREATE);
+  adw_preferences_row_set_use_markup (ADW_PREFERENCES_ROW (widget),
+                                      adw_preferences_row_get_use_markup (row));
+  adw_preferences_row_set_use_underline (ADW_PREFERENCES_ROW (widget),
+                                         adw_preferences_row_get_use_underline (row));
+  adw_preferences_row_set_title (ADW_PREFERENCES_ROW (widget),
+                                 adw_preferences_row_get_title (row));
   adw_action_row_set_subtitle (widget, subtitle);
 
   g_object_set_data (G_OBJECT (widget), "page", page);
@@ -323,7 +300,7 @@ search_results_unmap (AdwPreferencesWindow *self)
 }
 
 static void
-try_remove_subpages (AdwPreferencesWindow *self)
+try_remove_legacy_subpages (AdwPreferencesWindow *self)
 {
   AdwPreferencesWindowPrivate *priv = adw_preferences_window_get_instance_private (self);
   GtkWidget *child;
@@ -331,7 +308,7 @@ try_remove_subpages (AdwPreferencesWindow *self)
   if (adw_leaflet_get_child_transition_running (priv->subpages_leaflet))
     return;
 
-  if (adw_leaflet_get_visible_child (priv->subpages_leaflet) == priv->preferences)
+  if (adw_leaflet_get_visible_child (priv->subpages_leaflet) == GTK_WIDGET (priv->subpages_nav_view))
     priv->subpage = NULL;
 
   child = gtk_widget_get_first_child (GTK_WIDGET (priv->subpages_leaflet));
@@ -340,21 +317,41 @@ try_remove_subpages (AdwPreferencesWindow *self)
 
     child = gtk_widget_get_next_sibling (child);
 
-    if (page != priv->preferences && page != priv->subpage)
+    if (page != GTK_WIDGET (priv->subpages_nav_view) && page != priv->subpage)
       adw_leaflet_remove (priv->subpages_leaflet, page);
   }
 }
 
 static void
-subpages_leaflet_child_transition_running_cb (AdwPreferencesWindow *self)
+update_view_switcher (AdwPreferencesWindow *self)
 {
-  try_remove_subpages (self);
-}
+  AdwPreferencesWindowPrivate *priv = adw_preferences_window_get_instance_private (self);
+  AdwBreakpoint *breakpoint;
+  AdwBreakpointCondition *main_condition, *fallback_condition, *condition;
 
-static void
-subpages_leaflet_visible_child_cb (AdwPreferencesWindow *self)
-{
-  try_remove_subpages (self);
+  main_condition =
+    adw_breakpoint_condition_new_length (ADW_BREAKPOINT_CONDITION_MAX_WIDTH,
+                                         VIEW_SWITCHER_PAGE_THRESHOLD * MAX (1, priv->n_pages),
+                                         ADW_LENGTH_UNIT_PT);
+  fallback_condition =
+    adw_breakpoint_condition_new_length (ADW_BREAKPOINT_CONDITION_MAX_WIDTH,
+                                         VIEW_SWITCHER_FALLBACK_THRESHOLD,
+                                         ADW_LENGTH_UNIT_PX);
+
+  condition = adw_breakpoint_condition_new_or (main_condition, fallback_condition);
+
+  adw_breakpoint_set_condition (priv->breakpoint, condition);
+
+  breakpoint = adw_breakpoint_bin_get_current_breakpoint (ADW_BREAKPOINT_BIN (priv->breakpoint_bin));
+
+  if (!breakpoint && priv->n_pages > 1)
+    gtk_stack_set_visible_child (GTK_STACK (priv->view_switcher_stack), priv->view_switcher);
+  else
+    gtk_stack_set_visible_child (GTK_STACK (priv->view_switcher_stack), priv->title);
+
+  adw_breakpoint_condition_free (condition);
+
+  gtk_filter_changed (priv->page_filter, GTK_FILTER_CHANGE_DIFFERENT);
 }
 
 static void
@@ -363,7 +360,7 @@ title_stack_notify_transition_running_cb (AdwPreferencesWindow *self)
   AdwPreferencesWindowPrivate *priv = adw_preferences_window_get_instance_private (self);
 
   if (gtk_stack_get_transition_running (priv->title_stack) ||
-      gtk_stack_get_visible_child (priv->title_stack) != GTK_WIDGET (priv->view_switcher_title))
+      gtk_stack_get_visible_child (priv->title_stack) != priv->view_switcher_stack)
     return;
 
   gtk_editable_set_text (GTK_EDITABLE (priv->search_entry), "");
@@ -375,7 +372,7 @@ title_stack_notify_visible_child_cb (AdwPreferencesWindow *self)
   AdwPreferencesWindowPrivate *priv = adw_preferences_window_get_instance_private (self);
 
   if (adw_get_enable_animations (GTK_WIDGET (priv->title_stack)) ||
-      gtk_stack_get_visible_child (priv->title_stack) != GTK_WIDGET (priv->view_switcher_title))
+      gtk_stack_get_visible_child (priv->title_stack) != priv->view_switcher_stack)
     return;
 
   gtk_editable_set_text (GTK_EDITABLE (priv->search_entry), "");
@@ -426,7 +423,7 @@ search_changed_cb (AdwPreferencesWindow *self)
   AdwPreferencesWindowPrivate *priv = adw_preferences_window_get_instance_private (self);
   guint n;
 
-  gtk_filter_changed (priv->filter, GTK_FILTER_CHANGE_DIFFERENT);
+  gtk_filter_changed (priv->row_filter, GTK_FILTER_CHANGE_DIFFERENT);
 
   n = g_list_model_get_n_items (G_LIST_MODEL (priv->filter_model));
 
@@ -553,11 +550,11 @@ adw_preferences_window_class_init (AdwPreferencesWindowClass *klass)
   object_class->dispose = adw_preferences_window_dispose;
 
   /**
-   * AdwViewStack:visible-page: (attributes org.gtk.Property.get=adw_preferences_window_get_visible_page org.gtk.Property.set=adw_preferences_window_set_visible_page)
+   * AdwPreferencesWindow:visible-page:
    *
    * The currently visible page.
    *
-   * Since: 1.0
+   * Deprecated: 1.6: Use [class@PreferencesDialog].
    */
   props[PROP_VISIBLE_PAGE] =
     g_param_spec_object ("visible-page", NULL, NULL,
@@ -565,13 +562,13 @@ adw_preferences_window_class_init (AdwPreferencesWindowClass *klass)
                          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
   /**
-   * AdwViewStack:visible-page-name: (attributes org.gtk.Property.get=adw_preferences_window_get_visible_page_name org.gtk.Property.set=adw_preferences_window_set_visible_page_name)
+   * AdwPreferencesWindow:visible-page-name:
    *
    * The name of the currently visible page.
    *
-   * See [property@ViewStack:visible-child].
+   * See [property@PreferencesWindow:visible-page].
    *
-   * Since: 1.0
+   * Deprecated: 1.6: Use [class@PreferencesDialog].
    */
   props[PROP_VISIBLE_PAGE_NAME] =
     g_param_spec_string ("visible-page-name", NULL, NULL,
@@ -579,11 +576,11 @@ adw_preferences_window_class_init (AdwPreferencesWindowClass *klass)
                          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
   /**
-   * AdwPreferencesWindow:search-enabled: (attributes org.gtk.Property.get=adw_preferences_window_get_search_enabled org.gtk.Property.set=adw_preferences_window_set_search_enabled)
+   * AdwPreferencesWindow:search-enabled:
    *
    * Whether search is enabled.
    *
-   * Since: 1.0
+   * Deprecated: 1.6: Use [class@PreferencesDialog].
    */
   props[PROP_SEARCH_ENABLED] =
     g_param_spec_boolean ("search-enabled", NULL, NULL,
@@ -591,7 +588,7 @@ adw_preferences_window_class_init (AdwPreferencesWindowClass *klass)
                           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
   /**
-   * AdwPreferencesWindow:can-navigate-back: (attributes org.gtk.Property.get=adw_preferences_window_get_can_navigate_back org.gtk.Property.set=adw_preferences_window_set_can_navigate_back)
+   * AdwPreferencesWindow:can-navigate-back:
    *
    * Whether gestures and shortcuts for closing subpages are enabled.
    *
@@ -606,23 +603,32 @@ adw_preferences_window_class_init (AdwPreferencesWindowClass *klass)
    *
    * For right-to-left locales, gestures and shortcuts are reversed.
    *
-   * Since: 1.0
+   * Has no effect for subpages added with
+   * [method@PreferencesWindow.push_subpage].
+   *
+   * Deprecated: 1.4: Use [property@NavigationPage:can-pop] instead.
    */
   props[PROP_CAN_NAVIGATE_BACK] =
     g_param_spec_boolean ("can-navigate-back", NULL, NULL,
                           FALSE,
-                          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
+                          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY | G_PARAM_DEPRECATED);
 
   g_object_class_install_properties (object_class, LAST_PROP, props);
 
+#ifdef __APPLE__
+  gtk_widget_class_add_binding (widget_class, GDK_KEY_f, GDK_META_MASK, search_open_cb, NULL);
+#else
   gtk_widget_class_add_binding (widget_class, GDK_KEY_f, GDK_CONTROL_MASK, search_open_cb, NULL);
+#endif
+
   gtk_widget_class_add_binding (widget_class, GDK_KEY_Escape, 0, close_cb, NULL);
 
   gtk_widget_class_set_template_from_resource (widget_class,
                                                "/org/gnome/Adwaita/ui/adw-preferences-window.ui");
   gtk_widget_class_bind_template_child_private (widget_class, AdwPreferencesWindow, toast_overlay);
   gtk_widget_class_bind_template_child_private (widget_class, AdwPreferencesWindow, subpages_leaflet);
-  gtk_widget_class_bind_template_child_private (widget_class, AdwPreferencesWindow, preferences);
+  gtk_widget_class_bind_template_child_private (widget_class, AdwPreferencesWindow, subpages_nav_view);
+  gtk_widget_class_bind_template_child_private (widget_class, AdwPreferencesWindow, breakpoint_bin);
   gtk_widget_class_bind_template_child_private (widget_class, AdwPreferencesWindow, content_stack);
   gtk_widget_class_bind_template_child_private (widget_class, AdwPreferencesWindow, pages_stack);
   gtk_widget_class_bind_template_child_private (widget_class, AdwPreferencesWindow, search_button);
@@ -630,10 +636,12 @@ adw_preferences_window_class_init (AdwPreferencesWindowClass *klass)
   gtk_widget_class_bind_template_child_private (widget_class, AdwPreferencesWindow, search_results);
   gtk_widget_class_bind_template_child_private (widget_class, AdwPreferencesWindow, search_stack);
   gtk_widget_class_bind_template_child_private (widget_class, AdwPreferencesWindow, title_stack);
-  gtk_widget_class_bind_template_child_private (widget_class, AdwPreferencesWindow, view_switcher_bar);
-  gtk_widget_class_bind_template_child_private (widget_class, AdwPreferencesWindow, view_switcher_title);
-  gtk_widget_class_bind_template_callback (widget_class, subpages_leaflet_child_transition_running_cb);
-  gtk_widget_class_bind_template_callback (widget_class, subpages_leaflet_visible_child_cb);
+  gtk_widget_class_bind_template_child_private (widget_class, AdwPreferencesWindow, view_switcher_stack);
+  gtk_widget_class_bind_template_child_private (widget_class, AdwPreferencesWindow, view_switcher);
+  gtk_widget_class_bind_template_child_private (widget_class, AdwPreferencesWindow, title);
+  gtk_widget_class_bind_template_child_private (widget_class, AdwPreferencesWindow, breakpoint);
+  gtk_widget_class_bind_template_callback (widget_class, try_remove_legacy_subpages);
+  gtk_widget_class_bind_template_callback (widget_class, update_view_switcher);
   gtk_widget_class_bind_template_callback (widget_class, title_stack_notify_transition_running_cb);
   gtk_widget_class_bind_template_callback (widget_class, title_stack_notify_visible_child_cb);
   gtk_widget_class_bind_template_callback (widget_class, notify_visible_page_cb);
@@ -647,11 +655,12 @@ adw_preferences_window_class_init (AdwPreferencesWindowClass *klass)
   gtk_widget_class_bind_template_callback (widget_class, stop_search_cb);
 }
 
-static gpointer
-preferences_page_to_rows (gpointer page,
-                          gpointer user_data)
+static GListModel *
+preferences_page_to_rows (AdwViewStackPage *page)
 {
-  GtkWidget *child = adw_view_stack_page_get_child (ADW_VIEW_STACK_PAGE (page));
+  GtkWidget *child = adw_view_stack_page_get_child (page);
+
+  g_object_unref (page);
 
   return adw_preferences_page_get_rows (ADW_PREFERENCES_PAGE (child));
 }
@@ -667,14 +676,19 @@ adw_preferences_window_init (AdwPreferencesWindow *self)
 
   gtk_widget_init_template (GTK_WIDGET (self));
 
-  priv->filter = GTK_FILTER (gtk_custom_filter_new ((GtkCustomFilterFunc) filter_search_results, self, NULL));
-  expr = gtk_property_expression_new (GTK_TYPE_STACK_PAGE, NULL, "visible");
+  priv->row_filter = GTK_FILTER (gtk_custom_filter_new ((GtkCustomFilterFunc) filter_search_results, self, NULL));
+
+  expr = gtk_property_expression_new (ADW_TYPE_VIEW_STACK_PAGE, NULL, "visible");
+  priv->page_filter = GTK_FILTER (gtk_bool_filter_new (expr));
 
   model = G_LIST_MODEL (adw_view_stack_get_pages (priv->pages_stack));
-  model = G_LIST_MODEL (gtk_filter_list_model_new (model, GTK_FILTER (gtk_bool_filter_new (expr))));
-  model = G_LIST_MODEL (gtk_map_list_model_new (model, preferences_page_to_rows, NULL, NULL));
+  model = G_LIST_MODEL (gtk_filter_list_model_new (model, priv->page_filter));
+  model = G_LIST_MODEL (gtk_map_list_model_new (model,
+                                                (GtkMapListModelMapFunc) preferences_page_to_rows,
+                                                NULL,
+                                                NULL));
   model = G_LIST_MODEL (gtk_flatten_list_model_new (model));
-  priv->filter_model = gtk_filter_list_model_new (model, priv->filter);
+  priv->filter_model = gtk_filter_list_model_new (model, priv->row_filter);
 
   gtk_search_entry_set_key_capture_widget (priv->search_entry, GTK_WIDGET (self));
 }
@@ -710,7 +724,7 @@ adw_preferences_window_buildable_init (GtkBuildableIface *iface)
  *
  * Returns: the newly created `AdwPreferencesWindow`
  *
- * Since: 1.0
+ * Deprecated: 1.6: Use [class@PreferencesDialog].
  */
 GtkWidget *
 adw_preferences_window_new (void)
@@ -725,7 +739,7 @@ adw_preferences_window_new (void)
  *
  * Adds a preferences page to @self.
  *
- * Since: 1.0
+ * Deprecated: 1.6: Use [class@PreferencesDialog].
  */
 void
 adw_preferences_window_add (AdwPreferencesWindow *self,
@@ -745,6 +759,9 @@ adw_preferences_window_add (AdwPreferencesWindow *self,
   g_object_bind_property (page, "title", stack_page, "title", G_BINDING_SYNC_CREATE);
   g_object_bind_property (page, "use-underline", stack_page, "use-underline", G_BINDING_SYNC_CREATE);
   g_object_bind_property (page, "name", stack_page, "name", G_BINDING_SYNC_CREATE);
+
+  priv->n_pages++;
+  update_view_switcher (self);
 }
 
 /**
@@ -754,7 +771,7 @@ adw_preferences_window_add (AdwPreferencesWindow *self,
  *
  * Removes a page from @self.
  *
- * Since: 1.0
+ * Deprecated: 1.6: Use [class@PreferencesDialog].
  */
 void
 adw_preferences_window_remove (AdwPreferencesWindow *self,
@@ -771,6 +788,9 @@ adw_preferences_window_remove (AdwPreferencesWindow *self,
     adw_view_stack_remove (priv->pages_stack, GTK_WIDGET (page));
   else
     ADW_CRITICAL_CANNOT_REMOVE_CHILD (self, page);
+
+  priv->n_pages--;
+  update_view_switcher (self);
 }
 
 /**
@@ -781,7 +801,7 @@ adw_preferences_window_remove (AdwPreferencesWindow *self,
  *
  * Returns: (transfer none) (nullable): the visible page
  *
- * Since: 1.0
+ * Deprecated: 1.6: Use [class@PreferencesDialog].
  */
 AdwPreferencesPage *
 adw_preferences_window_get_visible_page (AdwPreferencesWindow *self)
@@ -802,7 +822,7 @@ adw_preferences_window_get_visible_page (AdwPreferencesWindow *self)
  *
  * Makes @page the visible page of @self.
  *
- * Since: 1.0
+ * Deprecated: 1.6: Use [class@PreferencesDialog].
  */
 void
 adw_preferences_window_set_visible_page (AdwPreferencesWindow *self,
@@ -826,7 +846,7 @@ adw_preferences_window_set_visible_page (AdwPreferencesWindow *self,
  *
  * Returns: (transfer none) (nullable): the name of the visible page
  *
- * Since: 1.0
+ * Deprecated: 1.6: Use [class@PreferencesDialog].
  */
 const char *
 adw_preferences_window_get_visible_page_name (AdwPreferencesWindow *self)
@@ -847,9 +867,9 @@ adw_preferences_window_get_visible_page_name (AdwPreferencesWindow *self)
  *
  * Makes the page with the given name visible.
  *
- * See [property@ViewStack:visible-child].
+ * See [property@PreferencesWindow:visible-page].
  *
- * Since: 1.0
+ * Deprecated: 1.6: Use [class@PreferencesDialog].
  */
 void
 adw_preferences_window_set_visible_page_name (AdwPreferencesWindow *self,
@@ -865,14 +885,14 @@ adw_preferences_window_set_visible_page_name (AdwPreferencesWindow *self,
 }
 
 /**
- * adw_preferences_window_get_search_enabled: (attributes org.gtk.Method.get_property=search-enabled)
+ * adw_preferences_window_get_search_enabled:
  * @self: a preferences window
  *
  * Gets whether search is enabled for @self.
  *
  * Returns: whether search is enabled for @self.
  *
- * Since: 1.0
+ * Deprecated: 1.6: Use [class@PreferencesDialog].
  */
 gboolean
 adw_preferences_window_get_search_enabled (AdwPreferencesWindow *self)
@@ -887,13 +907,13 @@ adw_preferences_window_get_search_enabled (AdwPreferencesWindow *self)
 }
 
 /**
- * adw_preferences_window_set_search_enabled: (attributes org.gtk.Method.set_property=search-enabled)
+ * adw_preferences_window_set_search_enabled:
  * @self: a preferences window
  * @search_enabled: whether search is enabled
  *
  * Sets whether search is enabled for @self.
  *
- * Since: 1.0
+ * Deprecated: 1.6: Use [class@PreferencesDialog].
  */
 void
 adw_preferences_window_set_search_enabled (AdwPreferencesWindow *self,
@@ -923,7 +943,7 @@ adw_preferences_window_set_search_enabled (AdwPreferencesWindow *self,
 }
 
 /**
- * adw_preferences_window_set_can_navigate_back: (attributes org.gtk.Method.set_property=can-navigate-back)
+ * adw_preferences_window_set_can_navigate_back:
  * @self: a preferences window
  * @can_navigate_back: the new value
  *
@@ -940,7 +960,9 @@ adw_preferences_window_set_search_enabled (AdwPreferencesWindow *self,
  *
  * For right-to-left locales, gestures and shortcuts are reversed.
  *
- * Since: 1.0
+ * Has no effect for subpages added with [method@PreferencesWindow.push_subpage].
+ *
+ * Deprecated: 1.4: Use [method@NavigationPage.set_can_pop] instead.
  */
 void
 adw_preferences_window_set_can_navigate_back (AdwPreferencesWindow *self,
@@ -963,14 +985,14 @@ adw_preferences_window_set_can_navigate_back (AdwPreferencesWindow *self,
 }
 
 /**
- * adw_preferences_window_get_can_navigate_back: (attributes org.gtk.Method.get_property=can-navigate-back)
+ * adw_preferences_window_get_can_navigate_back:
  * @self: a preferences window
  *
  * Gets whether gestures and shortcuts for closing subpages are enabled.
  *
  * Returns: whether gestures and shortcuts are enabled.
  *
- * Since: 1.0
+ * Deprecated: 1.4: Use [method@NavigationPage.get_can_pop] instead.
  */
 gboolean
 adw_preferences_window_get_can_navigate_back (AdwPreferencesWindow *self)
@@ -994,7 +1016,7 @@ adw_preferences_window_get_can_navigate_back (AdwPreferencesWindow *self)
  * The transition can be cancelled by the user, in which case visible child will
  * change back to the previously visible child.
  *
- * Since: 1.0
+ * Deprecated: 1.4: Use [method@PreferencesWindow.push_subpage] instead.
  */
 void
 adw_preferences_window_present_subpage (AdwPreferencesWindow *self,
@@ -1029,7 +1051,7 @@ adw_preferences_window_present_subpage (AdwPreferencesWindow *self,
  *
  * If there is no presented subpage, this does nothing.
  *
- * Since: 1.0
+ * Deprecated: 1.4: Use [method@PreferencesWindow.pop_subpage] instead.
  */
 void
 adw_preferences_window_close_subpage (AdwPreferencesWindow *self)
@@ -1043,7 +1065,56 @@ adw_preferences_window_close_subpage (AdwPreferencesWindow *self)
   if (priv->subpage == NULL)
     return;
 
-  adw_leaflet_set_visible_child (priv->subpages_leaflet, priv->preferences);
+  adw_leaflet_set_visible_child (priv->subpages_leaflet, GTK_WIDGET (priv->subpages_nav_view));
+}
+
+/**
+ * adw_preferences_window_push_subpage:
+ * @self: a preferences window
+ * @page: the subpage
+ *
+ * Pushes @page onto the subpage stack of @self.
+ *
+ * The page will be automatically removed when popped.
+ *
+ * Since: 1.4
+ * Deprecated: 1.6: Use [class@PreferencesDialog].
+ */
+void
+adw_preferences_window_push_subpage (AdwPreferencesWindow *self,
+                                     AdwNavigationPage    *page)
+{
+  AdwPreferencesWindowPrivate *priv;
+
+  g_return_if_fail (ADW_IS_PREFERENCES_WINDOW (self));
+  g_return_if_fail (ADW_IS_NAVIGATION_PAGE (page));
+
+  priv = adw_preferences_window_get_instance_private (self);
+
+  adw_navigation_view_push (priv->subpages_nav_view, page);
+}
+
+/**
+ * adw_preferences_window_pop_subpage:
+ * @self: a preferences window
+ *
+ * Pop the visible page from the subpage stack of @self.
+ *
+ * Returns: `TRUE` if a page has been popped
+ *
+ * Since: 1.4
+ * Deprecated: 1.6: Use [class@PreferencesDialog].
+ */
+gboolean
+adw_preferences_window_pop_subpage (AdwPreferencesWindow *self)
+{
+  AdwPreferencesWindowPrivate *priv;
+
+  g_return_val_if_fail (ADW_IS_PREFERENCES_WINDOW (self), FALSE);
+
+  priv = adw_preferences_window_get_instance_private (self);
+
+  return adw_navigation_view_pop (priv->subpages_nav_view);
 }
 
 /**
@@ -1055,7 +1126,7 @@ adw_preferences_window_close_subpage (AdwPreferencesWindow *self)
  *
  * See [method@ToastOverlay.add_toast].
  *
- * Since: 1.0
+ * Deprecated: 1.6: Use [class@PreferencesDialog].
  */
 void
 adw_preferences_window_add_toast (AdwPreferencesWindow *self,

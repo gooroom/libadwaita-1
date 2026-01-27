@@ -5,9 +5,8 @@
  */
 
 #include "config.h"
-#include "adw-window-title.h"
 
-#include "adw-macros-private.h"
+#include "adw-window-title.h"
 
 /**
  * AdwWindowTitle:
@@ -25,8 +24,6 @@
  * ## CSS nodes
  *
  * `AdwWindowTitle` has a single CSS node with name `windowtitle`.
- *
- * Since: 1.0
  */
 
 enum {
@@ -100,10 +97,7 @@ adw_window_title_set_property (GObject      *object,
 static void
 adw_window_title_dispose (GObject *object)
 {
-  AdwWindowTitle *self = ADW_WINDOW_TITLE (object);
-
-  if (self->box)
-    gtk_widget_unparent (GTK_WIDGET (self->box));
+  gtk_widget_dispose_template (GTK_WIDGET (object), ADW_TYPE_WINDOW_TITLE);
 
   G_OBJECT_CLASS (adw_window_title_parent_class)->dispose (object);
 }
@@ -119,14 +113,12 @@ adw_window_title_class_init (AdwWindowTitleClass *klass)
   object_class->dispose = adw_window_title_dispose;
 
   /**
-   * AdwWindowTitle:title: (attributes org.gtk.Property.get=adw_window_title_get_title org.gtk.Property.set=adw_window_title_set_title)
+   * AdwWindowTitle:title:
    *
    * The title to display.
    *
    * The title typically identifies the current view or content item, and
    * generally does not use the application name.
-   *
-   * Since: 1.0
    */
   props[PROP_TITLE] =
     g_param_spec_string ("title", NULL, NULL,
@@ -134,13 +126,11 @@ adw_window_title_class_init (AdwWindowTitleClass *klass)
                          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
   /**
-   * AdwWindowTitle:subtitle: (attributes org.gtk.Property.get=adw_window_title_get_subtitle org.gtk.Property.set=adw_window_title_set_subtitle)
+   * AdwWindowTitle:subtitle:
    *
    * The subtitle to display.
    *
    * The subtitle should give the user additional details.
-   *
-   * Since: 1.0
    */
   props[PROP_SUBTITLE] =
     g_param_spec_string ("subtitle", NULL, NULL,
@@ -167,8 +157,6 @@ adw_window_title_class_init (AdwWindowTitleClass *klass)
  * Creates a new `AdwWindowTitle`.
  *
  * Returns: the newly created `AdwWindowTitle`
- *
- * Since: 1.0
  */
 GtkWidget *
 adw_window_title_new (const char *title,
@@ -181,14 +169,12 @@ adw_window_title_new (const char *title,
 }
 
 /**
- * adw_window_title_get_title: (attributes org.gtk.Method.get_property=title)
+ * adw_window_title_get_title:
  * @self: a window title
  *
  * Gets the title of @self.
  *
  * Returns: the title
- *
- * Since: 1.0
  */
 const char *
 adw_window_title_get_title (AdwWindowTitle *self)
@@ -199,7 +185,7 @@ adw_window_title_get_title (AdwWindowTitle *self)
 }
 
 /**
- * adw_window_title_set_title: (attributes org.gtk.Method.set_property=title)
+ * adw_window_title_set_title:
  * @self: a window title
  * @title: a title
  *
@@ -207,8 +193,6 @@ adw_window_title_get_title (AdwWindowTitle *self)
  *
  * The title typically identifies the current view or content item, and
  * generally does not use the application name.
- *
- * Since: 1.0
  */
 void
 adw_window_title_set_title (AdwWindowTitle *self,
@@ -227,14 +211,12 @@ adw_window_title_set_title (AdwWindowTitle *self,
 }
 
 /**
- * adw_window_title_get_subtitle: (attributes org.gtk.Method.get_property=subtitle)
+ * adw_window_title_get_subtitle:
  * @self: a window title
  *
  * Gets the subtitle of @self.
  *
  * Returns: the subtitle
- *
- * Since: 1.0
  */
 const char *
 adw_window_title_get_subtitle (AdwWindowTitle *self)
@@ -245,15 +227,13 @@ adw_window_title_get_subtitle (AdwWindowTitle *self)
 }
 
 /**
- * adw_window_title_set_subtitle: (attributes org.gtk.Method.set_property=subtitle)
+ * adw_window_title_set_subtitle:
  * @self: a window title
  * @subtitle: a subtitle
  *
  * Sets the subtitle of @self.
  *
  * The subtitle should give the user additional details.
- *
- * Since: 1.0
  */
 void
 adw_window_title_set_subtitle (AdwWindowTitle *self,

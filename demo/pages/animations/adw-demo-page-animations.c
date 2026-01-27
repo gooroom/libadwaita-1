@@ -6,22 +6,22 @@ struct _AdwDemoPageAnimations
 {
   AdwBin parent_instance;
 
-  GtkStack *animation_preferences_stack;
+  AdwViewStack *animation_preferences_stack;
   AdwAnimation *timed_animation;
   GtkWidget *timed_animation_sample;
   GtkWidget *timed_animation_button_box;
-  GtkSpinButton *timed_animation_repeat_count;
-  GtkSwitch *timed_animation_reverse;
-  GtkSwitch *timed_animation_alternate;
-  GtkSpinButton *timed_animation_duration;
+  AdwSpinRow *timed_animation_repeat_count;
+  AdwSwitchRow *timed_animation_reverse;
+  AdwSwitchRow *timed_animation_alternate;
+  AdwSpinRow *timed_animation_duration;
   AdwComboRow *timed_animation_easing;
   AdwAnimation *spring_animation;
-  GtkSpinButton *spring_animation_velocity;
-  GtkSpinButton *spring_animation_damping;
-  GtkSpinButton *spring_animation_mass;
-  GtkSpinButton *spring_animation_stiffness;
-  GtkSpinButton *spring_animation_epsilon;
-  GtkSwitch *spring_animation_clamp_switch;
+  AdwSpinRow *spring_animation_velocity;
+  AdwSpinRow *spring_animation_damping;
+  AdwSpinRow *spring_animation_mass;
+  AdwSpinRow *spring_animation_stiffness;
+  AdwSpinRow *spring_animation_epsilon;
+  AdwSwitchRow *spring_animation_clamp_switch;
 };
 
 enum {
@@ -33,14 +33,14 @@ enum {
 
 static GParamSpec *props[LAST_PROP];
 
-G_DEFINE_TYPE (AdwDemoPageAnimations, adw_demo_page_animations, ADW_TYPE_BIN)
+G_DEFINE_FINAL_TYPE (AdwDemoPageAnimations, adw_demo_page_animations, ADW_TYPE_BIN)
 
 static AdwAnimation *
 get_current_animation (AdwDemoPageAnimations *self)
 {
   const char *current_animation;
 
-  current_animation = gtk_stack_get_visible_child_name (self->animation_preferences_stack);
+  current_animation = adw_view_stack_get_visible_child_name (self->animation_preferences_stack);
 
   if (!g_strcmp0 (current_animation, "Timed")) {
     return self->timed_animation;
@@ -118,6 +118,14 @@ animations_easing_name (AdwEnumListItem *value,
     return g_strdup (_("Ease-out (Bounce)"));
   case ADW_EASE_IN_OUT_BOUNCE:
     return g_strdup (_("Ease-in-out (Bounce)"));
+  case ADW_EASE:
+    return g_strdup (_("Ease"));
+  case ADW_EASE_IN:
+    return g_strdup (_("Ease-in"));
+  case ADW_EASE_OUT:
+    return g_strdup (_("Ease-out"));
+  case ADW_EASE_IN_OUT:
+    return g_strdup (_("Ease-in-out"));
   default:
     return NULL;
   }
@@ -243,9 +251,9 @@ static void
 notify_spring_params_change (AdwDemoPageAnimations *self)
 {
   AdwSpringParams *spring_params =
-    adw_spring_params_new_full (gtk_spin_button_get_value (self->spring_animation_damping),
-                                gtk_spin_button_get_value (self->spring_animation_mass),
-                                gtk_spin_button_get_value (self->spring_animation_stiffness));
+    adw_spring_params_new_full (adw_spin_row_get_value (self->spring_animation_damping),
+                                adw_spin_row_get_value (self->spring_animation_mass),
+                                adw_spin_row_get_value (self->spring_animation_stiffness));
 
   adw_spring_animation_set_spring_params (ADW_SPRING_ANIMATION (self->spring_animation), spring_params);
 
@@ -297,6 +305,17 @@ adw_demo_page_animations_set_property (GObject      *object,
 }
 
 static void
+adw_demo_page_animations_dispose (GObject *object)
+{
+  AdwDemoPageAnimations *self = ADW_DEMO_PAGE_ANIMATIONS (object);
+
+  g_clear_object (&self->timed_animation);
+  g_clear_object (&self->spring_animation);
+
+  G_OBJECT_CLASS (adw_demo_page_animations_parent_class)->dispose (object);
+}
+
+static void
 adw_demo_page_animations_class_init (AdwDemoPageAnimationsClass *klass)
 {
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
@@ -304,6 +323,7 @@ adw_demo_page_animations_class_init (AdwDemoPageAnimationsClass *klass)
 
   object_class->set_property = adw_demo_page_animations_set_property;
   object_class->get_property = adw_demo_page_animations_get_property;
+  object_class->dispose = adw_demo_page_animations_dispose;
 
   props[PROP_TIMED_ANIMATION] =
     g_param_spec_object ("timed-animation", NULL, NULL,
@@ -369,10 +389,10 @@ adw_demo_page_animations_init (AdwDemoPageAnimations *self)
   g_object_bind_property (self->timed_animation_repeat_count, "value",
                           self->timed_animation, "repeat-count",
                           G_BINDING_SYNC_CREATE | G_BINDING_BIDIRECTIONAL);
-  g_object_bind_property (self->timed_animation_reverse, "state",
+  g_object_bind_property (self->timed_animation_reverse, "active",
                           self->timed_animation, "reverse",
                           G_BINDING_SYNC_CREATE | G_BINDING_BIDIRECTIONAL);
-  g_object_bind_property (self->timed_animation_alternate, "state",
+  g_object_bind_property (self->timed_animation_alternate, "active",
                           self->timed_animation, "alternate",
                           G_BINDING_SYNC_CREATE | G_BINDING_BIDIRECTIONAL);
   g_object_bind_property (self->timed_animation_duration, "value",
@@ -394,6 +414,9 @@ adw_demo_page_animations_init (AdwDemoPageAnimations *self)
 
   adw_timed_animation_set_easing (ADW_TIMED_ANIMATION (self->timed_animation),
                                   ADW_EASE_IN_OUT_CUBIC);
+
+  adw_animation_set_follow_enable_animations_setting (self->timed_animation, FALSE);
+  adw_animation_set_follow_enable_animations_setting (self->spring_animation, FALSE);
 
   g_object_notify_by_pspec (G_OBJECT (self), props[PROP_TIMED_ANIMATION]);
   g_object_notify_by_pspec (G_OBJECT (self), props[PROP_SPRING_ANIMATION]);

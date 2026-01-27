@@ -3,17 +3,15 @@
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
  *
- * Author: Alexander Mikhaylenko <alexander.mikhaylenko@puri.sm>
+ * Author: Alice Mikhaylenko <alice.mikhaylenko@puri.sm>
  */
 
 #include <adwaita.h>
 
-int notified;
-
 static void
-notify_cb (GtkWidget *widget, gpointer data)
+increment (int *data)
 {
-  notified++;
+  (*data)++;
 }
 
 static void
@@ -21,11 +19,11 @@ test_adw_bin_child (void)
 {
   AdwBin *bin = g_object_ref_sink (ADW_BIN (adw_bin_new ()));
   GtkWidget *widget = NULL;
+  int notified = 0;
 
   g_assert_nonnull (bin);
 
-  notified = 0;
-  g_signal_connect (bin, "notify::child", G_CALLBACK (notify_cb), NULL);
+  g_signal_connect_swapped (bin, "notify::child", G_CALLBACK (increment), &notified);
 
   g_object_get (bin, "child", &widget, NULL);
   g_assert_null (widget);

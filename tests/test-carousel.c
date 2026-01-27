@@ -1,17 +1,15 @@
 /*
- * Copyright (C) 2019 Alexander Mikhaylenko <exalm7659@gmail.com>
+ * Copyright (C) 2019 Alice Mikhaylenko <alicem@gnome.org>
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
  */
 
 #include <adwaita.h>
 
-int notified;
-
 static void
-notify_cb (GtkWidget *widget, gpointer data)
+increment (int *data)
 {
-  notified++;
+  (*data)++;
 }
 
 static void
@@ -21,7 +19,7 @@ allocate_carousel (AdwCarousel *carousel)
 
   gtk_widget_measure (GTK_WIDGET (carousel), GTK_ORIENTATION_HORIZONTAL, -1,
                       NULL, &width, NULL, NULL);
-  gtk_widget_measure (GTK_WIDGET (carousel), GTK_ORIENTATION_VERTICAL, -1,
+  gtk_widget_measure (GTK_WIDGET (carousel), GTK_ORIENTATION_VERTICAL, width,
                       NULL, &height, NULL, NULL);
   gtk_widget_allocate (GTK_WIDGET (carousel), width, height, 0, NULL);
 }
@@ -31,13 +29,13 @@ test_adw_carousel_add_remove (void)
 {
   AdwCarousel *carousel = g_object_ref_sink (ADW_CAROUSEL (adw_carousel_new ()));
   GtkWidget *child1, *child2, *child3;
+  int notified = 0;
 
   child1 = gtk_label_new ("");
   child2 = gtk_label_new ("");
   child3 = gtk_label_new ("");
 
-  notified = 0;
-  g_signal_connect (carousel, "notify::n-pages", G_CALLBACK (notify_cb), NULL);
+  g_signal_connect_swapped (carousel, "notify::n-pages", G_CALLBACK (increment), &notified);
 
   g_assert_cmpuint (adw_carousel_get_n_pages (carousel), ==, 0);
 
@@ -50,7 +48,7 @@ test_adw_carousel_add_remove (void)
   g_assert_cmpuint (adw_carousel_get_n_pages (carousel), ==, 2);
   g_assert_true (adw_carousel_get_nth_page (carousel, 0) == child2);
   g_assert_true (adw_carousel_get_nth_page (carousel, 1) == child1);
-  g_assert_cmpfloat (adw_carousel_get_position (carousel), ==, 1);
+  g_assert_true (G_APPROX_VALUE (adw_carousel_get_position (carousel), 1, DBL_EPSILON));
   g_assert_cmpint (notified, ==, 2);
 
   adw_carousel_insert (carousel, child3, 1);
@@ -59,14 +57,14 @@ test_adw_carousel_add_remove (void)
   g_assert_true (adw_carousel_get_nth_page (carousel, 0) == child2);
   g_assert_true (adw_carousel_get_nth_page (carousel, 1) == child3);
   g_assert_true (adw_carousel_get_nth_page (carousel, 2) == child1);
-  g_assert_cmpfloat (adw_carousel_get_position (carousel), ==, 2);
+  g_assert_true (G_APPROX_VALUE (adw_carousel_get_position (carousel), 2, DBL_EPSILON));
   g_assert_cmpint (notified, ==, 3);
 
   adw_carousel_scroll_to (carousel, child3, FALSE);
   adw_carousel_remove (carousel, child2);
   allocate_carousel (carousel);
   g_assert_cmpuint (adw_carousel_get_n_pages (carousel), ==, 2);
-  g_assert_cmpfloat (adw_carousel_get_position (carousel), ==, 0);
+  g_assert_true (G_APPROX_VALUE (adw_carousel_get_position (carousel), 0, DBL_EPSILON));
   g_assert_cmpint (notified, ==, 4);
 
   adw_carousel_remove (carousel, child1);
@@ -89,7 +87,7 @@ assert_carousel_positions (AdwCarousel *carousel,
   g_assert_true (adw_carousel_get_nth_page (carousel, 1) == child2);
   g_assert_true (adw_carousel_get_nth_page (carousel, 2) == child3);
   g_assert_true (adw_carousel_get_nth_page (carousel, 3) == child4);
-  g_assert_cmpfloat (adw_carousel_get_position (carousel), ==, position);
+  g_assert_true (G_APPROX_VALUE (adw_carousel_get_position (carousel), position, DBL_EPSILON));
 }
 
 static void
@@ -163,9 +161,9 @@ test_adw_carousel_interactive (void)
 {
   AdwCarousel *carousel = g_object_ref_sink (ADW_CAROUSEL (adw_carousel_new ()));
   gboolean interactive;
+  int notified = 0;
 
-  notified = 0;
-  g_signal_connect (carousel, "notify::interactive", G_CALLBACK (notify_cb), NULL);
+  g_signal_connect_swapped (carousel, "notify::interactive", G_CALLBACK (increment), &notified);
 
   /* Accessors */
   g_assert_true (adw_carousel_get_interactive (carousel));
@@ -191,9 +189,9 @@ test_adw_carousel_spacing (void)
 {
   AdwCarousel *carousel = g_object_ref_sink (ADW_CAROUSEL (adw_carousel_new ()));
   guint spacing;
+  int notified = 0;
 
-  notified = 0;
-  g_signal_connect (carousel, "notify::spacing", G_CALLBACK (notify_cb), NULL);
+  g_signal_connect_swapped (carousel, "notify::spacing", G_CALLBACK (increment), &notified);
 
   /* Accessors */
   g_assert_cmpuint (adw_carousel_get_spacing (carousel), ==, 0);
@@ -219,9 +217,9 @@ test_adw_carousel_allow_mouse_drag (void)
 {
   AdwCarousel *carousel = g_object_ref_sink (ADW_CAROUSEL (adw_carousel_new ()));
   gboolean allow_mouse_drag;
+  int notified = 0;
 
-  notified = 0;
-  g_signal_connect (carousel, "notify::allow-mouse-drag", G_CALLBACK (notify_cb), NULL);
+  g_signal_connect_swapped (carousel, "notify::allow-mouse-drag", G_CALLBACK (increment), &notified);
 
   /* Accessors */
   g_assert_true (adw_carousel_get_allow_mouse_drag (carousel));
@@ -247,9 +245,9 @@ test_adw_carousel_allow_long_swipes (void)
 {
   AdwCarousel *carousel = g_object_ref_sink (ADW_CAROUSEL (adw_carousel_new ()));
   gboolean allow_long_swipes;
+  int notified = 0;
 
-  notified = 0;
-  g_signal_connect (carousel, "notify::allow-long-swipes", G_CALLBACK (notify_cb), NULL);
+  g_signal_connect_swapped (carousel, "notify::allow-long-swipes", G_CALLBACK (increment), &notified);
 
   /* Accessors */
   g_assert_false (adw_carousel_get_allow_long_swipes (carousel));
@@ -275,9 +273,9 @@ test_adw_carousel_reveal_duration (void)
 {
   AdwCarousel *carousel = g_object_ref_sink (ADW_CAROUSEL (adw_carousel_new ()));
   guint duration;
+  int notified = 0;
 
-  notified = 0;
-  g_signal_connect (carousel, "notify::reveal-duration", G_CALLBACK (notify_cb), NULL);
+  g_signal_connect_swapped (carousel, "notify::reveal-duration", G_CALLBACK (increment), &notified);
 
   /* Accessors */
   g_assert_cmpuint (adw_carousel_get_reveal_duration (carousel), ==, 0);

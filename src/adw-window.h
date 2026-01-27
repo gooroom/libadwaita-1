@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 Alexander Mikhaylenko <alexm@gnome.org>
+ * Copyright (C) 2020 Alice Mikhaylenko <alicem@gnome.org>
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
  */
@@ -13,6 +13,9 @@
 #include "adw-version.h"
 
 #include <gtk/gtk.h>
+
+#include "adw-breakpoint.h"
+#include "adw-dialog.h"
 
 G_BEGIN_DECLS
 
@@ -37,5 +40,24 @@ GtkWidget *adw_window_get_content (AdwWindow *self);
 ADW_AVAILABLE_IN_ALL
 void       adw_window_set_content (AdwWindow *self,
                                    GtkWidget *content);
+
+ADW_AVAILABLE_IN_1_4
+void adw_window_add_breakpoint (AdwWindow     *self,
+                                AdwBreakpoint *breakpoint);
+
+ADW_AVAILABLE_IN_1_4
+AdwBreakpoint *adw_window_get_current_breakpoint (AdwWindow *self);
+
+ADW_AVAILABLE_IN_1_5
+GListModel *adw_window_get_dialogs (AdwWindow *self);
+
+ADW_AVAILABLE_IN_1_5
+AdwDialog *adw_window_get_visible_dialog (AdwWindow *self);
+
+ADW_AVAILABLE_IN_1_7
+gboolean adw_window_get_adaptive_preview (AdwWindow *self);
+ADW_AVAILABLE_IN_1_7
+void     adw_window_set_adaptive_preview (AdwWindow *self,
+                                          gboolean   adaptive_preview);
 
 G_END_DECLS

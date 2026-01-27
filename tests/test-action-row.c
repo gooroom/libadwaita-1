@@ -6,14 +6,11 @@
 
 #include <adwaita.h>
 
-int activated;
-
 static void
-activated_cb (GtkWidget *widget, gpointer data)
+increment (int *data)
 {
-  activated++;
+  (*data)++;
 }
-
 
 static void
 test_adw_action_row_add_remove (void)
@@ -53,20 +50,6 @@ test_adw_action_row_subtitle (void)
   adw_preferences_row_set_use_markup (ADW_PREFERENCES_ROW (row), FALSE);
   adw_action_row_set_subtitle (row, "Invalid <b>markup");
   g_assert_cmpstr (adw_action_row_get_subtitle (row), ==, "Invalid <b>markup");
-
-  g_assert_finalize_object (row);
-}
-
-static void
-test_adw_action_row_icon_name (void)
-{
-  AdwActionRow *row = g_object_ref_sink (ADW_ACTION_ROW (adw_action_row_new ()));
-  g_assert_nonnull (row);
-
-  g_assert_null (adw_action_row_get_icon_name (row));
-
-  adw_action_row_set_icon_name (row, "dummy-icon-name");
-  g_assert_cmpstr (adw_action_row_get_icon_name (row), ==, "dummy-icon-name");
 
   g_assert_finalize_object (row);
 }
@@ -113,15 +96,33 @@ test_adw_action_row_subtitle_lines (void)
   g_assert_finalize_object (row);
 }
 
+static void
+test_adw_action_row_subtitle_selectable (void)
+{
+  AdwActionRow *row = g_object_ref_sink (ADW_ACTION_ROW (adw_action_row_new ()));
+  g_assert_nonnull (row);
+
+  g_assert_false (adw_action_row_get_subtitle_selectable (row));
+
+  adw_action_row_set_subtitle_selectable (row, TRUE);
+  g_assert_true (adw_action_row_get_subtitle_selectable (row));
+
+  adw_action_row_set_subtitle_selectable (row, FALSE);
+  g_assert_false (adw_action_row_get_subtitle_selectable (row));
+
+  g_assert_finalize_object (row);
+}
+
 
 static void
 test_adw_action_row_activate (void)
 {
   AdwActionRow *row = g_object_ref_sink (ADW_ACTION_ROW (adw_action_row_new ()));
+  int activated = 0;
+
   g_assert_nonnull (row);
 
-  activated = 0;
-  g_signal_connect (row, "activated", G_CALLBACK (activated_cb), NULL);
+  g_signal_connect_swapped (row, "activated", G_CALLBACK (increment), &activated);
 
   adw_action_row_activate (row);
   g_assert_cmpint (activated, ==, 1);
@@ -139,9 +140,9 @@ main (int   argc,
 
   g_test_add_func("/Adwaita/ActionRow/add_remove", test_adw_action_row_add_remove);
   g_test_add_func("/Adwaita/ActionRow/subtitle", test_adw_action_row_subtitle);
-  g_test_add_func("/Adwaita/ActionRow/icon_name", test_adw_action_row_icon_name);
   g_test_add_func("/Adwaita/ActionRow/title_lines", test_adw_action_row_title_lines);
   g_test_add_func("/Adwaita/ActionRow/subtitle_lines", test_adw_action_row_subtitle_lines);
+  g_test_add_func("/Adwaita/ActionRow/subtitle_selectable", test_adw_action_row_subtitle_selectable);
   g_test_add_func("/Adwaita/ActionRow/activate", test_adw_action_row_activate);
 
   return g_test_run();

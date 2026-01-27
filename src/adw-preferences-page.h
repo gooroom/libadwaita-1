@@ -13,6 +13,7 @@
 #include "adw-version.h"
 
 #include <gtk/gtk.h>
+#include "adw-banner.h"
 #include "adw-preferences-group.h"
 
 G_BEGIN_DECLS
@@ -56,6 +57,12 @@ ADW_AVAILABLE_IN_ALL
 void        adw_preferences_page_set_title (AdwPreferencesPage *self,
                                             const char         *title);
 
+ADW_AVAILABLE_IN_1_4
+const char *adw_preferences_page_get_description (AdwPreferencesPage *self);
+ADW_AVAILABLE_IN_1_4
+void        adw_preferences_page_set_description (AdwPreferencesPage *self,
+                                                  const char         *description);
+
 ADW_AVAILABLE_IN_ALL
 const char *adw_preferences_page_get_name (AdwPreferencesPage *self);
 ADW_AVAILABLE_IN_ALL
@@ -67,5 +74,19 @@ gboolean adw_preferences_page_get_use_underline (AdwPreferencesPage *self);
 ADW_AVAILABLE_IN_ALL
 void     adw_preferences_page_set_use_underline (AdwPreferencesPage *self,
                                                  gboolean            use_underline);
+ADW_AVAILABLE_IN_1_6
+gboolean adw_preferences_page_get_description_centered (AdwPreferencesPage *self);
+ADW_AVAILABLE_IN_1_6
+void     adw_preferences_page_set_description_centered (AdwPreferencesPage *self,
+                                                        gboolean            centered);
+
+ADW_AVAILABLE_IN_1_7
+AdwBanner *adw_preferences_page_get_banner (AdwPreferencesPage *self);
+ADW_AVAILABLE_IN_1_7
+void       adw_preferences_page_set_banner (AdwPreferencesPage *self,
+                                            AdwBanner          *banner);
+
+ADW_AVAILABLE_IN_1_3
+void adw_preferences_page_scroll_to_top (AdwPreferencesPage *self);
 
 G_END_DECLS

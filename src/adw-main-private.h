@@ -21,4 +21,8 @@ G_BEGIN_DECLS
  */
 void adw_init_public_types (void);
 
+gboolean adw_is_granite_present (void);
+
+gboolean adw_is_adaptive_preview (void);
+
 G_END_DECLS

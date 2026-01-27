@@ -7,8 +7,8 @@
 
 #include "config.h"
 
-#include "adw-macros-private.h"
 #include "adw-view-switcher-title.h"
+
 #include "adw-squeezer.h"
 #include "adw-window-title.h"
 
@@ -42,24 +42,23 @@
  * switcher, as follows:
  *
  * ```xml
- * <object class="GtkWindow">
- *   <property name="titlebar">
- *     <object class="AdwHeaderBar">
- *       <property name="centering-policy">strict</property>
- *       <property name="title-widget">
- *         <object class="AdwViewSwitcherTitle" id="title">
- *           <property name="stack">stack</property>
+ * <object class="AdwWindow">
+ *   <property name="content">
+ *     <object class="AdwToolbarView">
+ *       <child type="top">
+ *         <object class="AdwHeaderBar">
+ *           <property name="centering-policy">strict</property>
+ *           <property name="title-widget">
+ *             <object class="AdwViewSwitcherTitle" id="title">
+ *               <property name="stack">stack</property>
+ *             </object>
+ *           </property>
  *         </object>
- *       </property>
- *     </object>
- *   </property>
- *   <property name="child">
- *     <object class="GtkBox">
- *       <property name="orientation">vertical</property>
- *       <child>
- *         <object class="AdwViewStack" id="stack"/>
  *       </child>
- *       <child>
+ *       <property name="content">
+ *         <object class="AdwViewStack" id="stack"/>
+ *       </property>
+ *       <child type="bottom">
  *         <object class="AdwViewSwitcherBar">
  *           <property name="stack">stack</property>
  *           <binding name="reveal">
@@ -76,7 +75,7 @@
  *
  * `AdwViewSwitcherTitle` has a single CSS node with name `viewswitchertitle`.
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwviewswitchertitle)
  */
 
 enum {
@@ -208,17 +207,18 @@ adw_view_switcher_title_dispose (GObject *object)
 {
   AdwViewSwitcherTitle *self = ADW_VIEW_SWITCHER_TITLE (object);
 
-  if (self->pages)
+  if (self->pages) {
     g_signal_handlers_disconnect_by_func (self->pages, G_CALLBACK (update_view_switcher_visible), self);
+    g_clear_object (&self->pages);
+  }
 
-  if (self->squeezer)
-    gtk_widget_unparent (GTK_WIDGET (self->squeezer));
+  gtk_widget_dispose_template (GTK_WIDGET (self), ADW_TYPE_VIEW_SWITCHER_TITLE);
 
   G_OBJECT_CLASS (adw_view_switcher_title_parent_class)->dispose (object);
 }
 
-static gboolean
-check_window_width (AdwViewSwitcherTitle *self)
+static void
+check_window_width_cb (AdwViewSwitcherTitle *self)
 {
   GtkRoot *root = gtk_widget_get_root (GTK_WIDGET (self));
   int width = gtk_widget_get_width (GTK_WIDGET (root));
@@ -227,14 +227,16 @@ check_window_width (AdwViewSwitcherTitle *self)
   update_view_switcher_visible (self);
 
   self->check_window_width_id = 0;
-  return G_SOURCE_REMOVE;
 }
 
 static void
 notify_surface_width_cb (AdwViewSwitcherTitle *self)
 {
-  if (self->check_window_width_id == 0)
-    self->check_window_width_id = g_idle_add (G_SOURCE_FUNC (check_window_width), self);
+  if (self->check_window_width_id)
+    return;
+
+  self->check_window_width_id =
+    g_idle_add_once ((GSourceOnceFunc) check_window_width_cb, self);
 }
 
 static void
@@ -281,48 +283,48 @@ adw_view_switcher_title_class_init (AdwViewSwitcherTitleClass *klass)
   widget_class->unrealize = adw_view_switcher_title_unrealize;
 
   /**
-   * AdwViewSwitcherTitle:stack: (attributes org.gtk.Property.get=adw_view_switcher_title_get_stack org.gtk.Property.set=adw_view_switcher_title_set_stack)
+   * AdwViewSwitcherTitle:stack:
    *
    * The stack the view switcher controls.
    *
-   * Since: 1.0
+   * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwviewswitchertitle)
    */
   props[PROP_STACK] =
     g_param_spec_object ("stack", NULL, NULL,
                          ADW_TYPE_VIEW_STACK,
-                         G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
+                         G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY | G_PARAM_DEPRECATED);
 
   /**
-   * AdwViewSwitcherTitle:title: (attributes org.gtk.Property.get=adw_view_switcher_title_get_title org.gtk.Property.set=adw_view_switcher_title_set_title)
+   * AdwViewSwitcherTitle:title:
    *
    * The title to display.
    *
    * The title typically identifies the current view or content item, and
    * generally does not use the application name.
    *
-   * Since: 1.0
+   * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwviewswitchertitle)
    */
   props[PROP_TITLE] =
     g_param_spec_string ("title", NULL, NULL,
                          "",
-                         G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
+                         G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY | G_PARAM_DEPRECATED);
 
   /**
-   * AdwViewSwitcherTitle:subtitle: (attributes org.gtk.Property.get=adw_view_switcher_title_get_subtitle org.gtk.Property.set=adw_view_switcher_title_set_subtitle)
+   * AdwViewSwitcherTitle:subtitle:
    *
    * The subtitle to display.
    *
    * The subtitle should give the user additional details.
    *
-   * Since: 1.0
+   * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwviewswitchertitle)
    */
   props[PROP_SUBTITLE] =
     g_param_spec_string ("subtitle", NULL, NULL,
                          "",
-                         G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
+                         G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY | G_PARAM_DEPRECATED);
 
   /**
-   * AdwViewSwitcherTitle:view-switcher-enabled: (attributes org.gtk.Property.get=adw_view_switcher_title_get_view_switcher_enabled org.gtk.Property.set=adw_view_switcher_title_set_view_switcher_enabled)
+   * AdwViewSwitcherTitle:view-switcher-enabled:
    *
    * Whether the view switcher is enabled.
    *
@@ -333,27 +335,27 @@ adw_view_switcher_title_class_init (AdwViewSwitcherTitleClass *klass)
    * This can be used e.g. to ensure the view switcher is hidden below a certain
    * window width, or any other constraint you find suitable.
    *
-   * Since: 1.0
+   * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwviewswitchertitle)
    */
   props[PROP_VIEW_SWITCHER_ENABLED] =
     g_param_spec_boolean ("view-switcher-enabled", NULL, NULL,
                          TRUE,
-                         G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
+                         G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY | G_PARAM_DEPRECATED);
 
   /**
-   * AdwViewSwitcherTitle:title-visible: (attributes org.gtk.Property.get=adw_view_switcher_title_get_title_visible)
+   * AdwViewSwitcherTitle:title-visible:
    *
    * Whether the title is currently visible.
    *
    * If the title is visible, it means the view switcher is hidden an it may be
    * wanted to show an alternative switcher, e.g. a [class@ViewSwitcherBar].
    *
-   * Since: 1.0
+   * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwviewswitchertitle)
    */
   props[PROP_TITLE_VISIBLE] =
     g_param_spec_boolean ("title-visible", NULL, NULL,
                          TRUE,
-                         G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
+                         G_PARAM_READABLE | G_PARAM_STATIC_STRINGS | G_PARAM_DEPRECATED);
 
   g_object_class_install_properties (object_class, LAST_PROP, props);
 
@@ -389,7 +391,7 @@ adw_view_switcher_title_init (AdwViewSwitcherTitle *self)
  *
  * Returns: the newly created `AdwViewSwitcherTitle`
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwviewswitchertitle)
  */
 GtkWidget *
 adw_view_switcher_title_new (void)
@@ -398,14 +400,14 @@ adw_view_switcher_title_new (void)
 }
 
 /**
- * adw_view_switcher_title_get_stack: (attributes org.gtk.Method.get_property=stack)
+ * adw_view_switcher_title_get_stack:
  * @self: a view switcher title
  *
  * Gets the stack controlled by @self.
  *
  * Returns: (nullable) (transfer none): the stack
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwviewswitchertitle)
  */
 AdwViewStack *
 adw_view_switcher_title_get_stack (AdwViewSwitcherTitle *self)
@@ -416,13 +418,13 @@ adw_view_switcher_title_get_stack (AdwViewSwitcherTitle *self)
 }
 
 /**
- * adw_view_switcher_title_set_stack: (attributes org.gtk.Method.set_property=stack)
+ * adw_view_switcher_title_set_stack:
  * @self: a view switcher title
  * @stack: (nullable): a stack
  *
  * Sets the stack controlled by @self.
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwviewswitchertitle)
  */
 void
 adw_view_switcher_title_set_stack (AdwViewSwitcherTitle *self,
@@ -458,14 +460,14 @@ adw_view_switcher_title_set_stack (AdwViewSwitcherTitle *self,
 }
 
 /**
- * adw_view_switcher_title_get_title: (attributes org.gtk.Method.get_property=title)
+ * adw_view_switcher_title_get_title:
  * @self: a view switcher title
  *
  * Gets the title of @self.
  *
  * Returns: the title
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwviewswitchertitle)
  */
 const char *
 adw_view_switcher_title_get_title (AdwViewSwitcherTitle *self)
@@ -476,7 +478,7 @@ adw_view_switcher_title_get_title (AdwViewSwitcherTitle *self)
 }
 
 /**
- * adw_view_switcher_title_set_title: (attributes org.gtk.Method.set_property=title)
+ * adw_view_switcher_title_set_title:
  * @self: a view switcher title
  * @title: a title
  *
@@ -485,7 +487,7 @@ adw_view_switcher_title_get_title (AdwViewSwitcherTitle *self)
  * The title typically identifies the current view or content item, and
  * generally does not use the application name.
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwviewswitchertitle)
  */
 void
 adw_view_switcher_title_set_title (AdwViewSwitcherTitle *self,
@@ -502,14 +504,14 @@ adw_view_switcher_title_set_title (AdwViewSwitcherTitle *self,
 }
 
 /**
- * adw_view_switcher_title_get_subtitle: (attributes org.gtk.Method.get_property=subtitle)
+ * adw_view_switcher_title_get_subtitle:
  * @self: a view switcher title
  *
  * Gets the subtitle of @self.
  *
  * Returns: the subtitle
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwviewswitchertitle)
  */
 const char *
 adw_view_switcher_title_get_subtitle (AdwViewSwitcherTitle *self)
@@ -520,7 +522,7 @@ adw_view_switcher_title_get_subtitle (AdwViewSwitcherTitle *self)
 }
 
 /**
- * adw_view_switcher_title_set_subtitle: (attributes org.gtk.Method.set_property=subtitle)
+ * adw_view_switcher_title_set_subtitle:
  * @self: a view switcher title
  * @subtitle: a subtitle
  *
@@ -528,7 +530,7 @@ adw_view_switcher_title_get_subtitle (AdwViewSwitcherTitle *self)
  *
  * The subtitle should give the user additional details.
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwviewswitchertitle)
  */
 void
 adw_view_switcher_title_set_subtitle (AdwViewSwitcherTitle *self,
@@ -545,14 +547,14 @@ adw_view_switcher_title_set_subtitle (AdwViewSwitcherTitle *self,
 }
 
 /**
- * adw_view_switcher_title_get_view_switcher_enabled: (attributes org.gtk.Method.get_property=view-switcher-enabled)
+ * adw_view_switcher_title_get_view_switcher_enabled:
  * @self: a view switcher title
  *
  * Gets whether @self's view switcher is enabled.
  *
  * Returns: whether the view switcher is enabled
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwviewswitchertitle)
  */
 gboolean
 adw_view_switcher_title_get_view_switcher_enabled (AdwViewSwitcherTitle *self)
@@ -563,7 +565,7 @@ adw_view_switcher_title_get_view_switcher_enabled (AdwViewSwitcherTitle *self)
 }
 
 /**
- * adw_view_switcher_title_set_view_switcher_enabled: (attributes org.gtk.Method.set_property=view-switcher-enabled)
+ * adw_view_switcher_title_set_view_switcher_enabled:
  * @self: a view switcher title
  * @enabled: whether the view switcher is enabled
  *
@@ -576,7 +578,7 @@ adw_view_switcher_title_get_view_switcher_enabled (AdwViewSwitcherTitle *self)
  * This can be used e.g. to ensure the view switcher is hidden below a certain
  * window width, or any other constraint you find suitable.
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwviewswitchertitle)
  */
 void
 adw_view_switcher_title_set_view_switcher_enabled (AdwViewSwitcherTitle *self,
@@ -596,7 +598,7 @@ adw_view_switcher_title_set_view_switcher_enabled (AdwViewSwitcherTitle *self,
 }
 
 /**
- * adw_view_switcher_title_get_title_visible: (attributes org.gtk.Method.get_property=title-visible)
+ * adw_view_switcher_title_get_title_visible:
  * @self: a view switcher title
  *
  * Gets whether the title of @self is currently visible.
@@ -606,7 +608,7 @@ adw_view_switcher_title_set_view_switcher_enabled (AdwViewSwitcherTitle *self,
  *
  * Returns: whether the title of @self is currently visible
  *
- * Since: 1.0
+ * Deprecated: 1.4: See [the migration guide](migrating-to-breakpoints.html#replace-adwviewswitchertitle)
  */
 gboolean
 adw_view_switcher_title_get_title_visible (AdwViewSwitcherTitle *self)

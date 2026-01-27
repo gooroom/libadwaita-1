@@ -1,2 +1,2 @@
-gooroom-01-build-without-test.patch
-gooroom-02-libadwaita-without-adwaita.patch
+stylesheet-common-Use-disabled-opacity-for-disabled-pictu.patch
+stylesheet-common-Use-opacity-for-all-disabled-gtk-images.patch

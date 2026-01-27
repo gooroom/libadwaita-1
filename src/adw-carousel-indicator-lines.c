@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 Alexander Mikhaylenko <alexm@gnome.org>
+ * Copyright (C) 2020 Alice Mikhaylenko <alicem@gnome.org>
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
  */
@@ -8,7 +8,6 @@
 
 #include "adw-carousel-indicator-lines.h"
 
-#include "adw-macros-private.h"
 #include "adw-swipeable.h"
 #include "adw-timed-animation.h"
 
@@ -27,7 +26,7 @@
  * A lines indicator for [class@Carousel].
  *
  * <picture>
- *   <source srcset="carousel-indicator-dots-lines.png" media="(prefers-color-scheme: dark)">
+ *   <source srcset="carousel-indicator-lines-dark.png" media="(prefers-color-scheme: dark)">
  *   <img src="carousel-indicator-lines.png" alt="carousel-indicator-lines">
  * </picture>
  *
@@ -41,8 +40,6 @@
  *
  * `AdwCarouselIndicatorLines` has a single CSS node with name
  * `carouselindicatorlines`.
- *
- * Since: 1.0
  */
 
 struct _AdwCarouselIndicatorLines
@@ -70,18 +67,6 @@ enum {
 
 static GParamSpec *props[LAST_PROP];
 
-static GdkRGBA
-get_color (GtkWidget *widget)
-{
-  GtkStyleContext *context;
-  GdkRGBA color;
-
-  context = gtk_widget_get_style_context (widget);
-  gtk_style_context_get_color (context, &color);
-
-  return color;
-}
-
 static void
 snapshot_lines (GtkWidget      *widget,
                 GtkSnapshot    *snapshot,
@@ -95,7 +80,7 @@ snapshot_lines (GtkWidget      *widget,
   double indicator_length, full_size, line_size;
   double x = 0, y = 0, pos;
 
-  color = get_color (widget);
+  gtk_widget_get_color (widget, &color);
   color.alpha *= LINE_OPACITY;
 
   line_size = LINE_LENGTH + LINE_SPACING;
@@ -143,7 +128,7 @@ snapshot_lines (GtkWidget      *widget,
     pos += (LINE_LENGTH + LINE_SPACING) * sizes[i];
   }
 
-  color = get_color (widget);
+  gtk_widget_get_color (widget, &color);
   color.alpha *= LINE_OPACITY_ACTIVE;
 
   pos = position * (LINE_LENGTH + LINE_SPACING);
@@ -332,11 +317,9 @@ adw_carousel_indicator_lines_class_init (AdwCarouselIndicatorLinesClass *klass)
   widget_class->snapshot = adw_carousel_indicator_lines_snapshot;
 
   /**
-   * AdwCarouselIndicatorLines:carousel: (attributes org.gtk.Property.get=adw_carousel_indicator_lines_get_carousel org.gtk.Property.set=adw_carousel_indicator_lines_set_carousel)
+   * AdwCarouselIndicatorLines:carousel:
    *
    * The displayed carousel.
-   *
-   * Since: 1.0
    */
   props[PROP_CAROUSEL] =
     g_param_spec_object ("carousel", NULL, NULL,
@@ -361,6 +344,8 @@ adw_carousel_indicator_lines_init (AdwCarouselIndicatorLines *self)
 
   self->animation =
     adw_timed_animation_new (GTK_WIDGET (self), 0, 1, 0, target);
+
+  adw_timed_animation_set_easing (ADW_TIMED_ANIMATION (self->animation), ADW_LINEAR);
 }
 
 /**
@@ -369,8 +354,6 @@ adw_carousel_indicator_lines_init (AdwCarouselIndicatorLines *self)
  * Creates a new `AdwCarouselIndicatorLines`.
  *
  * Returns: the newly created `AdwCarouselIndicatorLines`
- *
- * Since: 1.0
  */
 GtkWidget *
 adw_carousel_indicator_lines_new (void)
@@ -379,14 +362,12 @@ adw_carousel_indicator_lines_new (void)
 }
 
 /**
- * adw_carousel_indicator_lines_get_carousel: (attributes org.gtk.Method.get_property=carousel)
+ * adw_carousel_indicator_lines_get_carousel:
  * @self: an indicator
  *
  * Gets the displayed carousel.
  *
  * Returns: (nullable) (transfer none): the displayed carousel
- *
- * Since: 1.0
  */
 AdwCarousel *
 adw_carousel_indicator_lines_get_carousel (AdwCarouselIndicatorLines *self)
@@ -397,13 +378,11 @@ adw_carousel_indicator_lines_get_carousel (AdwCarouselIndicatorLines *self)
 }
 
 /**
- * adw_carousel_indicator_lines_set_carousel: (attributes org.gtk.Method.set_property=carousel)
+ * adw_carousel_indicator_lines_set_carousel:
  * @self: an indicator
  * @carousel: (nullable): a carousel
  *
  * Sets the displayed carousel.
- *
- * Since: 1.0
  */
 void
 adw_carousel_indicator_lines_set_carousel (AdwCarouselIndicatorLines *self,

@@ -1,7 +1,5 @@
 #include "adw-demo-page-lists.h"
 
-#include <glib/gi18n.h>
-
 struct _AdwDemoPageLists
 {
   AdwBin parent_instance;
@@ -14,7 +12,7 @@ enum {
 
 static guint signals[SIGNAL_LAST_SIGNAL];
 
-G_DEFINE_TYPE (AdwDemoPageLists, adw_demo_page_lists, ADW_TYPE_BIN)
+G_DEFINE_FINAL_TYPE (AdwDemoPageLists, adw_demo_page_lists, ADW_TYPE_BIN)
 
 static void
 entry_apply_cb (AdwDemoPageLists *self)

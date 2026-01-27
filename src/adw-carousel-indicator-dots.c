@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 Alexander Mikhaylenko <alexm@gnome.org>
+ * Copyright (C) 2020 Alice Mikhaylenko <alicem@gnome.org>
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
  */
@@ -9,7 +9,6 @@
 #include "adw-carousel-indicator-dots.h"
 
 #include "adw-animation-util.h"
-#include "adw-macros-private.h"
 #include "adw-swipeable.h"
 #include "adw-timed-animation.h"
 
@@ -43,8 +42,6 @@
  *
  * `AdwCarouselIndicatorDots` has a single CSS node with name
  * `carouselindicatordots`.
- *
- * Since: 1.0
  */
 
 struct _AdwCarouselIndicatorDots
@@ -72,18 +69,6 @@ enum {
 
 static GParamSpec *props[LAST_PROP];
 
-static GdkRGBA
-get_color (GtkWidget *widget)
-{
-  GtkStyleContext *context;
-  GdkRGBA color;
-
-  context = gtk_widget_get_style_context (widget);
-  gtk_style_context_get_color (context, &color);
-
-  return color;
-}
-
 static void
 snapshot_dots (GtkWidget      *widget,
                GtkSnapshot    *snapshot,
@@ -98,7 +83,7 @@ snapshot_dots (GtkWidget      *widget,
   double current_position, remaining_progress;
   graphene_rect_t rect;
 
-  color = get_color (widget);
+  gtk_widget_get_color (widget, &color);
   dot_size = 2 * DOTS_RADIUS_SELECTED + DOTS_SPACING;
 
   indicator_length = -DOTS_SPACING;
@@ -347,11 +332,9 @@ adw_carousel_indicator_dots_class_init (AdwCarouselIndicatorDotsClass *klass)
   widget_class->snapshot = adw_carousel_indicator_dots_snapshot;
 
   /**
-   * AdwCarouselIndicatorDots:carousel: (attributes org.gtk.Property.get=adw_carousel_indicator_dots_get_carousel org.gtk.Property.set=adw_carousel_indicator_dots_set_carousel)
+   * AdwCarouselIndicatorDots:carousel:
    *
    * The displayed carousel.
-   *
-   * Since: 1.0
    */
   props[PROP_CAROUSEL] =
     g_param_spec_object ("carousel", NULL, NULL,
@@ -376,6 +359,8 @@ adw_carousel_indicator_dots_init (AdwCarouselIndicatorDots *self)
 
   self->animation =
     adw_timed_animation_new (GTK_WIDGET (self), 0, 1, 0, target);
+
+  adw_timed_animation_set_easing (ADW_TIMED_ANIMATION (self->animation), ADW_LINEAR);
 }
 
 /**
@@ -384,8 +369,6 @@ adw_carousel_indicator_dots_init (AdwCarouselIndicatorDots *self)
  * Creates a new `AdwCarouselIndicatorDots`.
  *
  * Returns: the newly created `AdwCarouselIndicatorDots`
- *
- * Since: 1.0
  */
 GtkWidget *
 adw_carousel_indicator_dots_new (void)
@@ -394,14 +377,12 @@ adw_carousel_indicator_dots_new (void)
 }
 
 /**
- * adw_carousel_indicator_dots_get_carousel: (attributes org.gtk.Method.get_property=carousel)
+ * adw_carousel_indicator_dots_get_carousel:
  * @self: an indicator
  *
  * Gets the displayed carousel.
  *
  * Returns: (nullable) (transfer none): the displayed carousel
- *
- * Since: 1.0
  */
 AdwCarousel *
 adw_carousel_indicator_dots_get_carousel (AdwCarouselIndicatorDots *self)
@@ -412,13 +393,11 @@ adw_carousel_indicator_dots_get_carousel (AdwCarouselIndicatorDots *self)
 }
 
 /**
- * adw_carousel_indicator_dots_set_carousel: (attributes org.gtk.Method.set_property=carousel)
+ * adw_carousel_indicator_dots_set_carousel:
  * @self: an indicator
  * @carousel: (nullable): a carousel
  *
  * Sets the displayed carousel.
- *
- * Since: 1.0
  */
 void
 adw_carousel_indicator_dots_set_carousel (AdwCarouselIndicatorDots *self,

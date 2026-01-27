@@ -8,14 +8,10 @@
 
 #include "adw-animation-target-private.h"
 
-#include "adw-macros-private.h"
-
 /**
  * AdwAnimationTarget:
  *
  * Represents a value [class@Animation] can animate.
- *
- * Since: 1.0
  */
 
 /**
@@ -23,8 +19,6 @@
  *
  * An [class@AnimationTarget] that calls a given callback during the
  * animation.
- *
- * Since: 1.0
  */
 
 /**
@@ -125,7 +119,7 @@ adw_callback_animation_target_init (AdwCallbackAnimationTarget *self)
 /**
  * adw_callback_animation_target_new:
  * @callback: (scope notified) (not nullable): the callback to call
- * @user_data: (closure callback): the data to be passed to @callback
+ * @user_data: the data to be passed to @callback
  * @destroy: (destroy user_data): the function to be called when the
  *   callback action is finalized
  *
@@ -133,8 +127,6 @@ adw_callback_animation_target_init (AdwCallbackAnimationTarget *self)
  * the animation.
  *
  * Returns: the newly created callback target
- *
- * Since: 1.0
  */
 AdwAnimationTarget *
 adw_callback_animation_target_new (AdwAnimationTargetFunc callback,
@@ -184,7 +176,6 @@ object_weak_notify (gpointer  data,
 {
   AdwPropertyAnimationTarget *self = ADW_PROPERTY_ANIMATION_TARGET (data);
   self->object = NULL;
-  g_critical ("Finalizing object associated with an AdwPropertyAnimationTarget");
 }
 
 static void
@@ -317,7 +308,7 @@ adw_property_animation_target_class_init (AdwPropertyAnimationTargetClass *klass
   target_class->set_value = adw_property_animation_target_set_value;
 
   /**
-   * AdwPropertyAnimationTarget:object: (attributes org.gtk.Property.get=adw_property_animation_target_get_object)
+   * AdwPropertyAnimationTarget:object:
    *
    * The object whose property will be animated.
    *
@@ -333,7 +324,7 @@ adw_property_animation_target_class_init (AdwPropertyAnimationTargetClass *klass
                          G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY | G_PARAM_STATIC_STRINGS);
 
   /**
-   * AdwPropertyAnimationTarget:pspec: (attributes org.gtk.Property.get=adw_property_animation_target_get_pspec)
+   * AdwPropertyAnimationTarget:pspec:
    *
    * The `GParamSpec` of the property to be animated.
    *
@@ -410,7 +401,7 @@ adw_property_animation_target_new_for_pspec (GObject    *object,
 }
 
 /**
- * adw_property_animation_target_get_object: (attributes org.gtk.Method.get_property=object)
+ * adw_property_animation_target_get_object:
  * @self: a property animation target
  *
  * Gets the object animated by @self.
@@ -432,7 +423,7 @@ adw_property_animation_target_get_object (AdwPropertyAnimationTarget *self)
 }
 
 /**
- * adw_property_animation_target_get_pspec: (attributes org.gtk.Method.get_property=pspec)
+ * adw_property_animation_target_get_pspec:
  * @self: a property animation target
  *
  * Gets the `GParamSpec` of the property animated by @self.

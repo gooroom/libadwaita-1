@@ -11,9 +11,9 @@
 #include "config.h"
 
 #include "adw-enums.h"
-#include "adw-macros-private.h"
 #include "adw-view-switcher.h"
 #include "adw-view-switcher-button-private.h"
+#include "adw-widget-utils-private.h"
 
 /**
  * AdwViewSwitcher:
@@ -33,8 +33,49 @@
  * displayed side by side, or icon on top of the label. This can be controlled
  * via the [property@ViewSwitcher:policy] property.
  *
- * Most applications should be using [class@ViewSwitcherBar] and
- * [class@ViewSwitcherTitle].
+ * `AdwViewSwitcher` is intended to be used in a header bar together with
+ * [class@ViewSwitcherBar] at the bottom of the window, and a [class@Breakpoint]
+ * showing the view switcher bar on narrow sizes, while removing the view
+ * switcher from the header bar, as follows:
+ *
+ * ```xml
+ * <object class="AdwWindow">
+ *   <child>
+ *     <object class="AdwBreakpoint">
+ *       <condition>max-width: 550sp</condition>
+ *       <setter object="switcher_bar" property="reveal">True</setter>
+ *       <setter object="header_bar" property="title-widget"/>
+ *     </object>
+ *   </child>
+ *   <property name="content">
+ *     <object class="AdwToolbarView">
+ *       <child type="top">
+ *         <object class="AdwHeaderBar" id="header_bar">
+ *           <property name="title-widget">
+ *             <object class="AdwViewSwitcher">
+ *               <property name="stack">stack</property>
+ *               <property name="policy">wide</property>
+ *             </object>
+ *           </property>
+ *         </object>
+ *       </child>
+ *       <property name="content">
+ *         <object class="AdwViewStack" id="stack"/>
+ *       </property>
+ *       <child type="bottom">
+ *         <object class="AdwViewSwitcherBar" id="switcher_bar">
+ *           <property name="stack">stack</property>
+ *         </object>
+ *       </child>
+ *     </object>
+ *   </property>
+ * </object>
+ * ```
+ *
+ * It's recommended to set [property@ViewSwitcher:policy] to
+ * `ADW_VIEW_SWITCHER_POLICY_WIDE` in this case.
+ *
+ * You may have to adjust the breakpoint condition for your specific pages.
  *
  * ## CSS nodes
  *
@@ -45,8 +86,6 @@
  *
  * `AdwViewSwitcher` uses the `GTK_ACCESSIBLE_ROLE_TAB_LIST` role and uses the
  * `GTK_ACCESSIBLE_ROLE_TAB` for its buttons.
- *
- * Since: 1.0
  */
 
 /**
@@ -72,6 +111,8 @@ struct _AdwViewSwitcher
   GtkSelectionModel *pages;
   GHashTable *buttons;
 
+  GtkWidget *active_button;
+
   AdwViewSwitcherPolicy policy;
 };
 
@@ -91,10 +132,14 @@ on_button_toggled (GtkWidget       *button,
   index = GPOINTER_TO_UINT (g_object_get_data (G_OBJECT (button), "child-index"));
 
   if (active) {
-      gtk_selection_model_select_item (self->pages, index, TRUE);
+    gtk_selection_model_select_item (self->pages, index, TRUE);
+    self->active_button = button;
   } else {
     gboolean selected = gtk_selection_model_is_selected (self->pages, index);
     gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (button), selected);
+
+    if (selected)
+      self->active_button = button;
   }
 }
 
@@ -161,6 +206,9 @@ add_child (AdwViewSwitcher *self,
   selected = gtk_selection_model_is_selected (self->pages, position);
   gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (button), selected);
 
+  if (selected)
+    self->active_button = GTK_WIDGET (button);
+
   gtk_accessible_update_state (GTK_ACCESSIBLE (button),
                                GTK_ACCESSIBLE_STATE_SELECTED, selected,
                                -1);
@@ -193,6 +241,8 @@ clear_switcher (AdwViewSwitcher *self)
   GtkWidget *page;
   GtkWidget *button;
 
+  self->active_button = NULL;
+
   g_hash_table_iter_init (&iter, self->buttons);
   while (g_hash_table_iter_next (&iter, (gpointer *) &page, (gpointer *) &button)) {
     gtk_widget_unparent (button);
@@ -216,6 +266,8 @@ selection_changed_cb (AdwViewSwitcher   *self,
 {
   guint i;
 
+  self->active_button = NULL;
+
   for (i = position; i < position + n_items; i++) {
     AdwViewStackPage *page = NULL;
     GtkWidget *button;
@@ -227,6 +279,8 @@ selection_changed_cb (AdwViewSwitcher   *self,
     if (button) {
       selected = gtk_selection_model_is_selected (self->pages, i);
       gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (button), selected);
+
+      self->active_button = button;
 
       gtk_accessible_update_state (GTK_ACCESSIBLE (button),
                                    GTK_ACCESSIBLE_STATE_SELECTED, selected,
@@ -274,6 +328,36 @@ unset_stack (AdwViewSwitcher *self)
   clear_switcher (self);
   g_clear_object (&self->stack);
   g_clear_object (&self->pages);
+}
+
+static gboolean
+adw_view_switcher_focus (GtkWidget        *widget,
+                         GtkDirectionType  direction)
+{
+  AdwViewSwitcher *self = ADW_VIEW_SWITCHER (widget);
+
+  if (!gtk_widget_get_focus_child (widget)) {
+    if (self->active_button)
+      return gtk_widget_child_focus (self->active_button, direction);
+
+    return adw_widget_focus_child (widget, direction);
+  }
+
+  if (direction == GTK_DIR_TAB_FORWARD || direction == GTK_DIR_TAB_BACKWARD)
+    return GDK_EVENT_PROPAGATE;
+
+  return adw_widget_focus_child (widget, direction);
+}
+
+static gboolean
+adw_view_switcher_grab_focus (GtkWidget *widget)
+{
+  AdwViewSwitcher *self = ADW_VIEW_SWITCHER (widget);
+
+  if (self->active_button)
+    return gtk_widget_grab_focus (self->active_button);
+
+  return adw_widget_grab_focus_child (widget);
 }
 
 static void
@@ -349,12 +433,13 @@ adw_view_switcher_class_init (AdwViewSwitcherClass *klass)
   object_class->dispose = adw_view_switcher_dispose;
   object_class->finalize = adw_view_switcher_finalize;
 
+  widget_class->focus = adw_view_switcher_focus;
+  widget_class->grab_focus = adw_view_switcher_grab_focus;
+
   /**
-   * AdwViewSwitcher:policy: (attributes org.gtk.Property.get=adw_view_switcher_get_policy org.gtk.Property.set=adw_view_switcher_set_policy)
+   * AdwViewSwitcher:policy:
    *
    * The policy to determine which mode to use.
-   *
-   * Since: 1.0
    */
   props[PROP_POLICY] =
     g_param_spec_enum ("policy", NULL, NULL,
@@ -363,11 +448,9 @@ adw_view_switcher_class_init (AdwViewSwitcherClass *klass)
                        G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
   /**
-   * AdwViewSwitcher:stack: (attributes org.gtk.Property.get=adw_view_switcher_get_stack org.gtk.Property.set=adw_view_switcher_set_stack)
+   * AdwViewSwitcher:stack:
    *
    * The stack the view switcher controls.
-   *
-   * Since: 1.0
    */
   props[PROP_STACK] =
     g_param_spec_object ("stack", NULL, NULL,
@@ -399,8 +482,6 @@ adw_view_switcher_init (AdwViewSwitcher *self)
  * Creates a new `AdwViewSwitcher`.
  *
  * Returns: the newly created `AdwViewSwitcher`
- *
- * Since: 1.0
  */
 GtkWidget *
 adw_view_switcher_new (void)
@@ -409,14 +490,12 @@ adw_view_switcher_new (void)
 }
 
 /**
- * adw_view_switcher_get_policy: (attributes org.gtk.Method.get_property=policy)
+ * adw_view_switcher_get_policy:
  * @self: a view switcher
  *
  * Gets the policy of @self.
  *
  * Returns: the policy of @self
- *
- * Since: 1.0
  */
 AdwViewSwitcherPolicy
 adw_view_switcher_get_policy (AdwViewSwitcher *self)
@@ -427,13 +506,11 @@ adw_view_switcher_get_policy (AdwViewSwitcher *self)
 }
 
 /**
- * adw_view_switcher_set_policy: (attributes org.gtk.Method.set_property=policy)
+ * adw_view_switcher_set_policy:
  * @self: a view switcher
  * @policy: the new policy
  *
  * Sets the policy of @self.
- *
- * Since: 1.0
  */
 void
 adw_view_switcher_set_policy (AdwViewSwitcher       *self,
@@ -468,14 +545,12 @@ adw_view_switcher_set_policy (AdwViewSwitcher       *self,
 }
 
 /**
- * adw_view_switcher_get_stack: (attributes org.gtk.Method.get_property=stack)
+ * adw_view_switcher_get_stack:
  * @self: a view switcher
  *
  * Gets the stack controlled by @self.
  *
  * Returns: (nullable) (transfer none): the stack
- *
- * Since: 1.0
  */
 AdwViewStack *
 adw_view_switcher_get_stack (AdwViewSwitcher *self)
@@ -486,13 +561,11 @@ adw_view_switcher_get_stack (AdwViewSwitcher *self)
 }
 
 /**
- * adw_view_switcher_set_stack: (attributes org.gtk.Method.set_property=stack)
+ * adw_view_switcher_set_stack:
  * @self: a view switcher
  * @stack: (nullable): a stack
  *
  * Sets the stack controlled by @self.
- *
- * Since: 1.0
  */
 void
 adw_view_switcher_set_stack (AdwViewSwitcher *self,

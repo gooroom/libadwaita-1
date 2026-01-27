@@ -14,5 +14,5 @@
  *
  * Determines when [class@Flap] and [class@Leaflet] will fold.
  *
- * Since: 1.0
+ * Deprecated: 1.4: Stop using `AdwLeaflet` and `AdwFlap`
  */

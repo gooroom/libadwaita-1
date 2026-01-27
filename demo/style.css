@@ -18,33 +18,73 @@ stacksidebar {
   margin-bottom: 36px;
 }
 
-flowbox.inline flowboxchild {
-  padding: 0;
-  background: none;
-  color: inherit;
-}
-
-#custom-button-1 {
-  color: @red_3;
-}
-
-#custom-button-2 {
-  color: @purple_3;
-}
-
-#custom-button-3 {
-  color: white;
-  background-color: @green_5;
-}
-
-#custom-button-4 {
-  color: white;
-  background-color: @orange_4;
-}
-
 #animation-sample {
   min-width: 30px;
   min-height: 30px;
   border-radius: 24px;
-  background: linear-gradient(to bottom, @green_2, @green_5);
+  background: linear-gradient(to bottom, var(--green-2), var(--green-5));
+}
+
+.tab-page {
+  --accent-bg-color: rgb(0 0 0 / 60%);
+  --accent-fg-color: white;
+  --accent-color: rgb(0 0 0 / 75%);
+  background: hsl(from var(--hue) h s 92%);
+}
+
+.tab-page-color-1 {
+  --hue: var(--blue-3);
+}
+
+.tab-page-color-2 {
+  --hue: var(--green-3);
+}
+
+.tab-page-color-3 {
+  --hue: var(--yellow-3);
+}
+
+.tab-page-color-4 {
+  --hue: var(--orange-3);
+}
+
+.tab-page-color-5 {
+  --hue: var(--red-3);
+}
+
+.tab-page-color-6 {
+  --hue: var(--purple-3);
+}
+
+.tab-page-color-7 {
+  --hue: var(--brown-3);
+}
+
+.tab-page-color-8 {
+  background: white;
+}
+
+.tag {
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  color: inherit;
+  border-radius: 99px;
+}
+
+.tag:dir(ltr) {
+  padding-left: 12px;
+}
+
+.tag:dir(rtl) {
+  padding-right: 12px;
+}
+
+.tag button {
+  margin: 3px;
+  min-width: 0;
+  min-height: 0;
+  padding: 6px;
+}
+
+.toolbar-demo {
+  border-radius: 15px;
 }

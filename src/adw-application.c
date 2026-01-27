@@ -37,8 +37,6 @@
  *
  * - `style-hc-dark.css` contains styles used when the system high contrast
  *   preference is enabled and [property@StyleManager:dark] is `TRUE`.
- *
- * Since: 1.0
  */
 
 typedef struct
@@ -123,14 +121,16 @@ init_providers (AdwApplication *self)
   base_uri = g_strconcat ("resource://", base_path, NULL);
   base_file = g_file_new_for_uri (base_uri);
 
-  init_provider_from_file (&priv->base_style_provider,
-                           g_file_get_child (base_file, "style.css"));
-  init_provider_from_file (&priv->dark_style_provider,
-                           g_file_get_child (base_file, "style-dark.css"));
-  init_provider_from_file (&priv->hc_style_provider,
-                           g_file_get_child (base_file, "style-hc.css"));
-  init_provider_from_file (&priv->hc_dark_style_provider,
-                           g_file_get_child (base_file, "style-hc-dark.css"));
+  if (!adw_is_granite_present ()) {
+    init_provider_from_file (&priv->base_style_provider,
+                             g_file_get_child (base_file, "style.css"));
+    init_provider_from_file (&priv->dark_style_provider,
+                             g_file_get_child (base_file, "style-dark.css"));
+    init_provider_from_file (&priv->hc_style_provider,
+                             g_file_get_child (base_file, "style-hc.css"));
+    init_provider_from_file (&priv->hc_dark_style_provider,
+                             g_file_get_child (base_file, "style-hc-dark.css"));
+  }
 
   g_object_unref (base_file);
   g_free (base_uri);
@@ -225,14 +225,12 @@ adw_application_class_init (AdwApplicationClass *klass)
   application_class->startup = adw_application_startup;
 
   /**
-   * AdwApplication:style-manager: (attributes org.gtk.Property.get=adw_application_get_style_manager)
+   * AdwApplication:style-manager:
    *
    * The style manager for this application.
    *
    * This is a convenience property allowing to access `AdwStyleManager` through
    * property bindings or expressions.
-   *
-   * Since: 1.0
    */
   props[PROP_STYLE_MANAGER] =
     g_param_spec_object ("style-manager", NULL, NULL,
@@ -261,8 +259,6 @@ adw_application_init (AdwApplication *self)
  * uniqueness) will be disabled.
  *
  * Returns: the newly created `AdwApplication`
- *
- * Since: 1.0
  */
 AdwApplication *
 adw_application_new (const char        *application_id,
@@ -275,7 +271,7 @@ adw_application_new (const char        *application_id,
 }
 
 /**
- * adw_application_get_style_manager: (attributes org.gtk.Method.get_property=style-manager)
+ * adw_application_get_style_manager:
  * @self: an application
  *
  * Gets the style manager for @self.
@@ -284,8 +280,6 @@ adw_application_new (const char        *application_id,
  * property bindings or expressions.
  *
  * Returns: (transfer none): the style manager
- *
- * Since: 1.0
  */
 AdwStyleManager *
 adw_application_get_style_manager (AdwApplication *self)

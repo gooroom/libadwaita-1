@@ -49,8 +49,6 @@
  *
  * If the initial and final values are equal, and the initial velocity is not 0,
  * the animation value will bounce and return to its resting position.
- *
- * Since: 1.0
  */
 
 struct _AdwSpringAnimation
@@ -75,7 +73,7 @@ struct _AdwSpringAnimationClass
   AdwAnimationClass parent_class;
 };
 
-G_DEFINE_TYPE (AdwSpringAnimation, adw_spring_animation, ADW_TYPE_ANIMATION)
+G_DEFINE_FINAL_TYPE (AdwSpringAnimation, adw_spring_animation, ADW_TYPE_ANIMATION)
 
 enum {
   PROP_0,
@@ -125,9 +123,12 @@ oscillate (AdwSpringAnimation *self,
    */
 
   /* Critically damped */
+  /* DBL_EPSILON is too small for this specific comparison, so we use
+   * FLT_EPSILON even though it's doubles */
   if (G_APPROX_VALUE (beta, omega0, FLT_EPSILON)) {
     if (velocity)
       *velocity = envelope * (-beta * t * v0 - beta * beta * t * x0 + v0);
+
     return self->value_to + envelope * (x0 + (beta * x0 + v0) * t);
   }
 
@@ -137,6 +138,7 @@ oscillate (AdwSpringAnimation *self,
 
     if (velocity)
       *velocity = envelope * (v0 * cos (omega1 * t) - (x0 * omega1 + (beta * beta * x0 + beta * v0) / (omega1)) * sin (omega1 * t));
+
     return self->value_to + envelope * (x0 * cos (omega1 * t) + ((beta * x0 + v0) / omega1) * sin (omega1 * t));
   }
 
@@ -146,8 +148,10 @@ oscillate (AdwSpringAnimation *self,
 
     if (velocity)
       *velocity = envelope * (v0 * coshl (omega2 * t) + (omega2 * x0 - (beta * beta * x0 + beta * v0) / omega2) * sinhl (omega2 * t));
+
     return self->value_to + envelope * (x0 * coshl (omega2 * t) + ((beta * x0 + v0) / omega2) * sinhl (omega2 * t));
   }
+
   g_assert_not_reached ();
 }
 
@@ -159,8 +163,8 @@ get_first_zero (AdwSpringAnimation *self)
   guint i = 1;
   double y = oscillate (self, i, NULL);
 
-  while ((self->value_to - self->value_from > FLT_EPSILON && self->value_to - y > self->epsilon) ||
-         (self->value_from - self->value_to > FLT_EPSILON && y - self->value_to > self->epsilon)) {
+  while ((self->value_to - self->value_from > DBL_EPSILON && self->value_to - y > self->epsilon) ||
+         (self->value_from - self->value_to > DBL_EPSILON && y - self->value_to > self->epsilon)) {
     if (i > MAX_ITERATIONS)
       return 0;
 
@@ -185,11 +189,11 @@ calculate_duration (AdwSpringAnimation *self)
 
   int i = 0;
 
-  if (beta <= 0)
+  if (G_APPROX_VALUE (beta, 0, DBL_EPSILON) || beta < 0)
     return ADW_DURATION_INFINITE;
 
   if (self->clamp) {
-    if (G_APPROX_VALUE (self->value_to, self->value_from, FLT_EPSILON))
+    if (G_APPROX_VALUE (self->value_to, self->value_from, DBL_EPSILON))
       return 0;
 
     return get_first_zero (self);
@@ -204,7 +208,9 @@ calculate_duration (AdwSpringAnimation *self)
    */
   x0 = -log (self->epsilon) / beta;
 
-  if (beta <= omega0)
+  /* DBL_EPSILON is too small for this specific comparison, so we use
+   * FLT_EPSILON even though it's doubles */
+  if (G_APPROX_VALUE (beta, omega0, FLT_EPSILON) || beta < omega0)
     return x0 * 1000;
 
   /*
@@ -213,22 +219,23 @@ calculate_duration (AdwSpringAnimation *self)
    * Newton's root finding method is a good candidate in this particular case:
    * https://en.wikipedia.org/wiki/Newton%27s_method
    */
-  y0 = oscillate (self, x0*1000, NULL);
+  y0 = oscillate (self, x0 * 1000, NULL);
   m = (oscillate (self, (x0 + DELTA) * 1000, NULL) - y0) / DELTA;
 
   x1 = (self->value_to - y0 + m * x0) / m;
-  y1 = oscillate (self, x1*1000, NULL);
+  y1 = oscillate (self, x1 * 1000, NULL);
 
   while (ABS (self->value_to - y1) > self->epsilon) {
     if (i>1000)
       return 0;
+
     x0 = x1;
     y0 = y1;
 
     m = (oscillate (self, (x0 + DELTA) * 1000, NULL) - y0) / DELTA;
 
     x1 = (self->value_to - y0 + m * x0) / m;
-    y1 = oscillate (self, x1*1000, NULL);
+    y1 = oscillate (self, x1 * 1000, NULL);
     i++;
   }
 
@@ -256,8 +263,8 @@ adw_spring_animation_estimate_duration (AdwAnimation *animation)
 }
 
 static double
-adw_spring_animation_calculate_value (AdwAnimation *animation,
-                                      guint         t)
+adw_spring_animation_real_calculate_value (AdwAnimation *animation,
+                                           guint         t)
 {
   AdwSpringAnimation *self = ADW_SPRING_ANIMATION (animation);
   double value;
@@ -391,17 +398,15 @@ adw_spring_animation_class_init (AdwSpringAnimationClass *klass)
   object_class->get_property = adw_spring_animation_get_property;
 
   animation_class->estimate_duration = adw_spring_animation_estimate_duration;
-  animation_class->calculate_value = adw_spring_animation_calculate_value;
+  animation_class->calculate_value = adw_spring_animation_real_calculate_value;
 
   /**
-   * AdwSpringAnimation:value-from: (attributes org.gtk.Property.get=adw_spring_animation_get_value_from org.gtk.Property.set=adw_spring_animation_set_value_from)
+   * AdwSpringAnimation:value-from:
    *
    * The value to animate from.
    *
    * The animation will start at this value and end at
    * [property@SpringAnimation:value-to].
-   *
-   * Since: 1.0
    */
   props[PROP_VALUE_FROM] =
     g_param_spec_double ("value-from", NULL, NULL,
@@ -411,14 +416,12 @@ adw_spring_animation_class_init (AdwSpringAnimationClass *klass)
                          G_PARAM_READWRITE | G_PARAM_CONSTRUCT | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
   /**
-   * AdwSpringAnimation:value-to: (attributes org.gtk.Property.get=adw_spring_animation_get_value_to org.gtk.Property.set=adw_spring_animation_set_value_to)
+   * AdwSpringAnimation:value-to:
    *
    * The value to animate to.
    *
    * The animation will start at [property@SpringAnimation:value-from] and end
    * at this value.
-   *
-   * Since: 1.0
    */
   props[PROP_VALUE_TO] =
     g_param_spec_double ("value-to", NULL, NULL,
@@ -428,11 +431,9 @@ adw_spring_animation_class_init (AdwSpringAnimationClass *klass)
                          G_PARAM_READWRITE | G_PARAM_CONSTRUCT | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
   /**
-   * AdwSpringAnimation:spring-params: (attributes org.gtk.Property.get=adw_spring_animation_get_spring_params org.gtk.Property.set=adw_spring_animation_set_spring_params)
+   * AdwSpringAnimation:spring-params:
    *
    * Physical parameters describing the spring.
-   *
-   * Since: 1.0
    */
   props[PROP_SPRING_PARAMS] =
     g_param_spec_boxed ("spring-params", NULL, NULL,
@@ -440,13 +441,11 @@ adw_spring_animation_class_init (AdwSpringAnimationClass *klass)
                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
   /**
-   * AdwSpringAnimation:initial-velocity: (attributes org.gtk.Property.get=adw_spring_animation_get_initial_velocity org.gtk.Property.set=adw_spring_animation_set_initial_velocity)
+   * AdwSpringAnimation:initial-velocity:
    *
    * The initial velocity to start the animation with.
    *
    * Initial velocity affects only the animation curve, but not its duration.
-   *
-   * Since: 1.0
    */
   props[PROP_INITIAL_VELOCITY] =
     g_param_spec_double ("initial-velocity", NULL, NULL,
@@ -456,7 +455,7 @@ adw_spring_animation_class_init (AdwSpringAnimationClass *klass)
                          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
   /**
-   * AdwSpringAnimation:epsilon: (attributes org.gtk.Property.get=adw_spring_animation_get_epsilon org.gtk.Property.set=adw_spring_animation_set_epsilon)
+   * AdwSpringAnimation:epsilon:
    *
    * Precision of the spring.
    *
@@ -470,8 +469,6 @@ adw_spring_animation_class_init (AdwSpringAnimationClass *klass)
    * If the epsilon value is too large, the animation will end prematurely.
    *
    * The default value is 0.001.
-   *
-   * Since: 1.0
    */
   props[PROP_EPSILON] =
     g_param_spec_double ("epsilon", NULL, NULL,
@@ -481,7 +478,7 @@ adw_spring_animation_class_init (AdwSpringAnimationClass *klass)
                          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
   /**
-   * AdwSpringAnimation:clamp: (attributes org.gtk.Property.get=adw_spring_animation_get_clamp org.gtk.Property.set=adw_spring_animation_set_clamp)
+   * AdwSpringAnimation:clamp:
    *
    * Whether the animation should be clamped.
    *
@@ -490,8 +487,6 @@ adw_spring_animation_class_init (AdwSpringAnimationClass *klass)
    *
    * It won't prevent overshooting [property@SpringAnimation:value-from] if a
    * relative negative [property@SpringAnimation:initial-velocity] is set.
-   *
-   * Since: 1.0
    */
   props[PROP_CLAMP] =
     g_param_spec_boolean ("clamp", NULL, NULL,
@@ -499,13 +494,11 @@ adw_spring_animation_class_init (AdwSpringAnimationClass *klass)
                           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
   /**
-   * AdwSpringAnimation:estimated-duration: (attributes org.gtk.Property.get=adw_spring_animation_get_estimated_duration)
+   * AdwSpringAnimation:estimated-duration:
    *
    * Estimated duration of the animation, in milliseconds.
    *
    * Can be [const@DURATION_INFINITE] if the spring damping is set to 0.
-   *
-   * Since: 1.0
    */
   props[PROP_ESTIMATED_DURATION] =
     g_param_spec_uint ("estimated-duration", NULL, NULL,
@@ -515,11 +508,9 @@ adw_spring_animation_class_init (AdwSpringAnimationClass *klass)
                        G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
 
   /**
-   * AdwSpringAnimation:velocity: (attributes org.gtk.Property.get=adw_spring_animation_get_velocity)
+   * AdwSpringAnimation:velocity:
    *
    * Current velocity of the animation.
-   *
-   * Since: 1.0
    */
   props[PROP_VELOCITY] =
     g_param_spec_double ("velocity", NULL, NULL,
@@ -551,8 +542,6 @@ adw_spring_animation_init (AdwSpringAnimation *self)
  * spring described by @spring_params.
  *
  * Returns: (transfer none): the newly created animation
- *
- * Since: 1.0
  */
 AdwAnimation *
 adw_spring_animation_new (GtkWidget         *widget,
@@ -582,14 +571,12 @@ adw_spring_animation_new (GtkWidget         *widget,
 }
 
 /**
- * adw_spring_animation_get_value_from: (attributes org.gtk.Method.get_property=value-from)
+ * adw_spring_animation_get_value_from:
  * @self: a spring animation
  *
  * Gets the value @self will animate from.
  *
  * Returns: the value to animate from
- *
- * Since: 1.0
  */
 double
 adw_spring_animation_get_value_from (AdwSpringAnimation *self)
@@ -600,7 +587,7 @@ adw_spring_animation_get_value_from (AdwSpringAnimation *self)
 }
 
 /**
- * adw_spring_animation_set_value_from: (attributes org.gtk.Method.set_property=value-from)
+ * adw_spring_animation_set_value_from:
  * @self: a spring animation
  * @value: the value to animate from
  *
@@ -608,8 +595,6 @@ adw_spring_animation_get_value_from (AdwSpringAnimation *self)
  *
  * The animation will start at this value and end at
  * [property@SpringAnimation:value-to].
- *
- * Since: 1.0
  */
 void
 adw_spring_animation_set_value_from (AdwSpringAnimation *self,
@@ -617,7 +602,7 @@ adw_spring_animation_set_value_from (AdwSpringAnimation *self,
 {
   g_return_if_fail (ADW_IS_SPRING_ANIMATION (self));
 
-  if (G_APPROX_VALUE (self->value_from, value, FLT_EPSILON))
+  if (G_APPROX_VALUE (self->value_from, value, DBL_EPSILON))
     return;
 
   self->value_from = value;
@@ -628,14 +613,12 @@ adw_spring_animation_set_value_from (AdwSpringAnimation *self,
 }
 
 /**
- * adw_spring_animation_get_value_to: (attributes org.gtk.Method.get_property=value-to)
+ * adw_spring_animation_get_value_to:
  * @self: a spring animation
  *
  * Gets the value @self will animate to.
  *
  * Returns: the value to animate to
- *
- * Since: 1.0
  */
 double
 adw_spring_animation_get_value_to (AdwSpringAnimation *self)
@@ -646,7 +629,7 @@ adw_spring_animation_get_value_to (AdwSpringAnimation *self)
 }
 
 /**
- * adw_spring_animation_set_value_to: (attributes org.gtk.Method.set_property=value-to)
+ * adw_spring_animation_set_value_to:
  * @self: a spring animation
  * @value: the value to animate to
  *
@@ -654,8 +637,6 @@ adw_spring_animation_get_value_to (AdwSpringAnimation *self)
  *
  * The animation will start at [property@SpringAnimation:value-from] and end at
  * this value.
- *
- * Since: 1.0
  */
 void
 adw_spring_animation_set_value_to (AdwSpringAnimation *self,
@@ -663,7 +644,7 @@ adw_spring_animation_set_value_to (AdwSpringAnimation *self,
 {
   g_return_if_fail (ADW_IS_SPRING_ANIMATION (self));
 
-  if (G_APPROX_VALUE (self->value_to, value, FLT_EPSILON))
+  if (G_APPROX_VALUE (self->value_to, value, DBL_EPSILON))
     return;
 
   self->value_to = value;
@@ -674,14 +655,12 @@ adw_spring_animation_set_value_to (AdwSpringAnimation *self,
 }
 
 /**
- * adw_spring_animation_get_spring_params: (attributes org.gtk.Method.get_property=spring-params)
+ * adw_spring_animation_get_spring_params:
  * @self: a spring animation
  *
  * Gets the physical parameters of the spring of @self.
  *
  * Returns: (transfer none): the spring parameters
- *
- * Since: 1.0
  */
 AdwSpringParams *
 adw_spring_animation_get_spring_params (AdwSpringAnimation *self)
@@ -692,13 +671,11 @@ adw_spring_animation_get_spring_params (AdwSpringAnimation *self)
 }
 
 /**
- * adw_spring_animation_set_spring_params: (attributes org.gtk.Method.set_property=spring-params)
+ * adw_spring_animation_set_spring_params:
  * @self: a spring animation
  * @spring_params: the new spring parameters
  *
  * Sets the physical parameters of the spring of @self.
- *
- * Since: 1.0
  */
 void
 adw_spring_animation_set_spring_params (AdwSpringAnimation *self,
@@ -719,14 +696,12 @@ adw_spring_animation_set_spring_params (AdwSpringAnimation *self,
 }
 
 /**
- * adw_spring_animation_get_initial_velocity: (attributes org.gtk.Method.get_property=initial-velocity)
+ * adw_spring_animation_get_initial_velocity:
  * @self: a spring animation
  *
  * Gets the initial velocity of @self.
  *
  * Returns: the initial velocity
- *
- * Since: 1.0
  */
 double
 adw_spring_animation_get_initial_velocity (AdwSpringAnimation *self)
@@ -737,15 +712,13 @@ adw_spring_animation_get_initial_velocity (AdwSpringAnimation *self)
 }
 
 /**
- * adw_spring_animation_set_initial_velocity: (attributes org.gtk.Method.set_property=initial-velocity)
+ * adw_spring_animation_set_initial_velocity:
  * @self: a spring animation
  * @velocity: the initial velocity
  *
  * Sets the initial velocity of @self.
  *
  * Initial velocity affects only the animation curve, but not its duration.
- *
- * Since: 1.0
  */
 void
 adw_spring_animation_set_initial_velocity (AdwSpringAnimation *self,
@@ -753,7 +726,7 @@ adw_spring_animation_set_initial_velocity (AdwSpringAnimation *self,
 {
   g_return_if_fail (ADW_IS_SPRING_ANIMATION (self));
 
-  if (G_APPROX_VALUE (self->initial_velocity, velocity, FLT_EPSILON))
+  if (G_APPROX_VALUE (self->initial_velocity, velocity, DBL_EPSILON))
     return;
 
   self->initial_velocity = velocity;
@@ -764,14 +737,12 @@ adw_spring_animation_set_initial_velocity (AdwSpringAnimation *self,
 }
 
 /**
- * adw_spring_animation_get_epsilon: (attributes org.gtk.Method.get_property=epsilon)
+ * adw_spring_animation_get_epsilon:
  * @self: a spring animation
  *
  * Gets the precision of the spring.
  *
  * Returns: the epsilon value
- *
- * Since: 1.0
  */
 double
 adw_spring_animation_get_epsilon (AdwSpringAnimation *self)
@@ -782,7 +753,7 @@ adw_spring_animation_get_epsilon (AdwSpringAnimation *self)
 }
 
 /**
- * adw_spring_animation_set_epsilon: (attributes org.gtk.Method.set_property=epsilon)
+ * adw_spring_animation_set_epsilon:
  * @self: a spring animation
  * @epsilon: the new value
  *
@@ -798,8 +769,6 @@ adw_spring_animation_get_epsilon (AdwSpringAnimation *self)
  * If the epsilon value is too large, the animation will end prematurely.
  *
  * The default value is 0.001.
- *
- * Since: 1.0
  */
 void
 adw_spring_animation_set_epsilon (AdwSpringAnimation *self,
@@ -808,7 +777,7 @@ adw_spring_animation_set_epsilon (AdwSpringAnimation *self,
   g_return_if_fail (ADW_IS_SPRING_ANIMATION (self));
   g_return_if_fail (epsilon> 0.0);
 
-  if (G_APPROX_VALUE (self->epsilon, epsilon, FLT_EPSILON))
+  if (G_APPROX_VALUE (self->epsilon, epsilon, DBL_EPSILON))
     return;
 
   self->epsilon = epsilon;
@@ -819,14 +788,12 @@ adw_spring_animation_set_epsilon (AdwSpringAnimation *self,
 }
 
 /**
- * adw_spring_animation_get_clamp: (attributes org.gtk.Method.get_property=clamp)
+ * adw_spring_animation_get_clamp:
  * @self: a spring animation
  *
  * Gets whether @self should be clamped.
  *
  * Returns: whether @self is clamped
- *
- * Since: 1.0
  */
 gboolean
 adw_spring_animation_get_clamp (AdwSpringAnimation *self)
@@ -837,7 +804,7 @@ adw_spring_animation_get_clamp (AdwSpringAnimation *self)
 }
 
 /**
- * adw_spring_animation_set_clamp: (attributes org.gtk.Method.set_property=clamp)
+ * adw_spring_animation_set_clamp:
  * @self: a spring animation
  * @clamp: the new value
  *
@@ -848,8 +815,6 @@ adw_spring_animation_get_clamp (AdwSpringAnimation *self)
  *
  * It won't prevent overshooting [property@SpringAnimation:value-from] if a
  * relative negative [property@SpringAnimation:initial-velocity] is set.
- *
- * Since: 1.0
  */
 void
 adw_spring_animation_set_clamp (AdwSpringAnimation *self,
@@ -868,16 +833,68 @@ adw_spring_animation_set_clamp (AdwSpringAnimation *self,
 }
 
 /**
- * adw_spring_animation_get_estimated_duration: (attributes org.gtk.Method.get_property=estimated-duration)
+ * adw_spring_animation_calculate_value:
+ * @self: a spring animation
+ * @time: elapsed time, in milliseconds
+ *
+ * Calculates the value @self will have at @time.
+ *
+ * The time starts at 0 and ends at
+ * [property@SpringAnimation:estimated_duration].
+ *
+ * See also [method@SpringAnimation.calculate_velocity].
+ *
+ * Returns: the value at @time
+ *
+ * Since: 1.3
+ */
+double
+adw_spring_animation_calculate_value (AdwSpringAnimation *self,
+                                      guint               time)
+{
+  g_return_val_if_fail (ADW_IS_SPRING_ANIMATION (self), 0.0);
+
+  return oscillate (self, time, NULL);
+}
+
+/**
+ * adw_spring_animation_calculate_velocity:
+ * @self: a spring animation
+ * @time: elapsed time, in milliseconds
+ *
+ * Calculates the velocity @self will have at @time.
+ *
+ * The time starts at 0 and ends at
+ * [property@SpringAnimation:estimated_duration].
+ *
+ * See also [method@SpringAnimation.calculate_value].
+ *
+ * Returns: the velocity at @time
+ *
+ * Since: 1.3
+ */
+double
+adw_spring_animation_calculate_velocity (AdwSpringAnimation *self,
+                                         guint               time)
+{
+  double velocity;
+
+  g_return_val_if_fail (ADW_IS_SPRING_ANIMATION (self), 0.0);
+
+  oscillate (self, time, &velocity);
+
+  return velocity;
+}
+
+/**
+ * adw_spring_animation_get_estimated_duration:
  * @self: a spring animation
  *
- * Gets the estimated duration of @self.
+ * Gets the estimated duration of @self, in milliseconds.
  *
  * Can be [const@DURATION_INFINITE] if the spring damping is set to 0.
  *
  * Returns: the estimated duration
- *
- * Since: 1.0
  */
 guint
 adw_spring_animation_get_estimated_duration (AdwSpringAnimation *self)
@@ -888,14 +905,12 @@ adw_spring_animation_get_estimated_duration (AdwSpringAnimation *self)
 }
 
 /**
- * adw_spring_animation_get_velocity: (attributes org.gtk.Method.get_property=velocity)
+ * adw_spring_animation_get_velocity:
  * @self: a spring animation
  *
  * Gets the current velocity of @self.
  *
  * Returns: the current velocity
- *
- * Since: 1.0
  */
 double
 adw_spring_animation_get_velocity (AdwSpringAnimation *self)

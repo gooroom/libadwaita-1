@@ -55,9 +55,9 @@ ADW_AVAILABLE_IN_ALL
 void         adw_action_row_set_subtitle (AdwActionRow *self,
                                           const char   *subtitle);
 
-ADW_AVAILABLE_IN_ALL
+ADW_DEPRECATED_IN_1_3_FOR (adw_action_row_add_prefix)
 const char  *adw_action_row_get_icon_name (AdwActionRow *self);
-ADW_AVAILABLE_IN_ALL
+ADW_DEPRECATED_IN_1_3_FOR (adw_action_row_add_prefix)
 void         adw_action_row_set_icon_name (AdwActionRow *self,
                                            const char   *icon_name);
 
@@ -78,6 +78,13 @@ int  adw_action_row_get_subtitle_lines (AdwActionRow *self);
 ADW_AVAILABLE_IN_ALL
 void adw_action_row_set_subtitle_lines (AdwActionRow *self,
                                         int           subtitle_lines);
+ADW_AVAILABLE_IN_1_3
+gboolean
+adw_action_row_get_subtitle_selectable (AdwActionRow *self);
+ADW_AVAILABLE_IN_1_3
+void
+adw_action_row_set_subtitle_selectable (AdwActionRow *self,
+                                        gboolean      subtitle_selectable);
 
 ADW_AVAILABLE_IN_ALL
 void adw_action_row_activate (AdwActionRow *self);

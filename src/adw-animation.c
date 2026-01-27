@@ -11,6 +11,7 @@
 
 #include "adw-animation-target-private.h"
 #include "adw-animation-util.h"
+#include "adw-marshalers.h"
 
 /**
  * AdwAnimation:
@@ -60,8 +61,6 @@
  * If there's a chance the previous animation for the same target hasn't yet
  * finished, the previous animation should be stopped first, or the existing
  * `AdwAnimation` object can be reused.
- *
- * Since: 1.0
  */
 
 /**
@@ -76,8 +75,6 @@
  * The state can be controlled with [method@Animation.play],
  * [method@Animation.pause], [method@Animation.resume],
  * [method@Animation.reset] and [method@Animation.skip].
- *
- * Since: 1.0
  */
 
 typedef struct
@@ -95,6 +92,8 @@ typedef struct
   gpointer user_data;
 
   AdwAnimationState state;
+
+  gboolean follow_enable_animations_setting;
 } AdwAnimationPrivate;
 
 G_DEFINE_ABSTRACT_TYPE_WITH_PRIVATE (AdwAnimation, adw_animation, G_TYPE_OBJECT)
@@ -105,6 +104,7 @@ enum {
   PROP_TARGET,
   PROP_VALUE,
   PROP_STATE,
+  PROP_FOLLOW_ENABLE_ANIMATIONS_SETTING,
   LAST_PROP,
 };
 
@@ -226,7 +226,8 @@ play (AdwAnimation *self)
   priv->state = ADW_ANIMATION_PLAYING;
   g_object_notify_by_pspec (G_OBJECT (self), props[PROP_STATE]);
 
-  if (!adw_get_enable_animations (priv->widget) ||
+  if ((priv->follow_enable_animations_setting &&
+       !adw_get_enable_animations (priv->widget)) ||
       !gtk_widget_get_mapped (priv->widget)) {
     adw_animation_skip (g_object_ref (self));
 
@@ -300,6 +301,10 @@ adw_animation_get_property (GObject    *object,
     g_value_set_enum (value, adw_animation_get_state (self));
     break;
 
+  case PROP_FOLLOW_ENABLE_ANIMATIONS_SETTING:
+    g_value_set_boolean (value, adw_animation_get_follow_enable_animations_setting (self));
+    break;
+
   default:
     G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
   }
@@ -322,6 +327,10 @@ adw_animation_set_property (GObject      *object,
     adw_animation_set_target (ADW_ANIMATION (self), g_value_get_object (value));
     break;
 
+  case PROP_FOLLOW_ENABLE_ANIMATIONS_SETTING:
+    adw_animation_set_follow_enable_animations_setting (self, g_value_get_boolean (value));
+    break;
+
   default:
     G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
   }
@@ -341,7 +350,7 @@ adw_animation_class_init (AdwAnimationClass *klass)
   klass->calculate_value = adw_animation_calculate_value;
 
   /**
-   * AdwAnimation:widget: (attributes org.gtk.Property.get=adw_animation_get_widget)
+   * AdwAnimation:widget:
    *
    * The animation widget.
    *
@@ -351,8 +360,6 @@ adw_animation_class_init (AdwAnimationClass *klass)
    * The widget must be mapped in order for the animation to work. If it's not
    * mapped, or if it gets unmapped during an ongoing animation, the animation
    * will be automatically skipped.
-   *
-   * Since: 1.0
    */
   props[PROP_WIDGET] =
     g_param_spec_object ("widget", NULL, NULL,
@@ -360,11 +367,9 @@ adw_animation_class_init (AdwAnimationClass *klass)
                          G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY | G_PARAM_STATIC_STRINGS);
 
   /**
-   * AdwAnimation:target: (attributes org.gtk.Property.get=adw_animation_get_target org.gtk.Property.set=adw_animation_set_target)
+   * AdwAnimation:target:
    *
    * The target to animate.
-   *
-   * Since: 1.0
    */
   props[PROP_TARGET] =
     g_param_spec_object ("target", NULL, NULL,
@@ -372,11 +377,9 @@ adw_animation_class_init (AdwAnimationClass *klass)
                          G_PARAM_READWRITE | G_PARAM_CONSTRUCT | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
   /**
-   * AdwAnimation:value: (attributes org.gtk.Property.get=adw_animation_get_value)
+   * AdwAnimation:value:
    *
    * The current value of the animation.
-   *
-   * Since: 1.0
    */
   props[PROP_VALUE] =
     g_param_spec_double ("value", NULL, NULL,
@@ -386,20 +389,38 @@ adw_animation_class_init (AdwAnimationClass *klass)
                          G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
 
   /**
-   * AdwAnimation:state: (attributes org.gtk.Property.get=adw_animation_get_state)
+   * AdwAnimation:state:
    *
    * The animation state.
    *
    * The state indicates whether the animation is currently playing, paused,
    * finished or hasn't been started yet.
-   *
-   * Since: 1.0
    */
   props[PROP_STATE] =
     g_param_spec_enum ("state", NULL, NULL,
                        ADW_TYPE_ANIMATION_STATE,
                        ADW_ANIMATION_IDLE,
                        G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
+
+  /**
+   * AdwAnimation:follow-enable-animations-setting:
+   *
+   * Whether to skip the animation when animations are globally disabled.
+   *
+   * The default behavior is to skip the animation. Set to `FALSE` to disable
+   * this behavior.
+   *
+   * This can be useful for cases where animation is essential, like spinners,
+   * or in demo applications. Most other animations should keep it enabled.
+   *
+   * See [property@Gtk.Settings:gtk-enable-animations].
+   *
+   * Since: 1.3
+   */
+  props[PROP_FOLLOW_ENABLE_ANIMATIONS_SETTING] =
+    g_param_spec_boolean ("follow-enable-animations-setting", NULL, NULL,
+                          TRUE,
+                          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
   g_object_class_install_properties (object_class, LAST_PROP, props);
 
@@ -408,17 +429,19 @@ adw_animation_class_init (AdwAnimationClass *klass)
    *
    * This signal is emitted when the animation has been completed, either on its
    * own or via calling [method@Animation.skip].
-   *
-   * Since: 1.0
    */
   signals[SIGNAL_DONE] =
     g_signal_new ("done",
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_LAST,
                   0,
-                  NULL, NULL, NULL,
+                  NULL, NULL,
+                  adw_marshal_VOID__VOID,
                   G_TYPE_NONE,
                   0);
+  g_signal_set_va_marshaller (signals[SIGNAL_DONE],
+                              G_TYPE_FROM_CLASS (klass),
+                              adw_marshal_VOID__VOIDv);
 }
 
 static void
@@ -427,10 +450,11 @@ adw_animation_init (AdwAnimation *self)
   AdwAnimationPrivate *priv = adw_animation_get_instance_private (self);
 
   priv->state = ADW_ANIMATION_IDLE;
+  priv->follow_enable_animations_setting = TRUE;
 }
 
 /**
- * adw_animation_get_widget: (attributes org.gtk.Method.get_property=widget)
+ * adw_animation_get_widget:
  * @self: an animation
  *
  * Gets the widget @self was created for.
@@ -443,8 +467,6 @@ adw_animation_init (AdwAnimation *self)
  * will be automatically skipped.
  *
  * Returns: (transfer none): the animation widget
- *
- * Since: 1.0
  */
 GtkWidget *
 adw_animation_get_widget (AdwAnimation *self)
@@ -459,14 +481,12 @@ adw_animation_get_widget (AdwAnimation *self)
 }
 
 /**
- * adw_animation_get_target: (attributes org.gtk.Method.get_property=target)
+ * adw_animation_get_target:
  * @self: an animation
  *
  * Gets the target @self animates.
  *
  * Returns: (transfer none): the animation target
- *
- * Since: 1.0
  */
 AdwAnimationTarget *
 adw_animation_get_target (AdwAnimation *self)
@@ -481,13 +501,11 @@ adw_animation_get_target (AdwAnimation *self)
 }
 
 /**
- * adw_animation_set_target: (attributes org.gtk.Method.set_property=target)
+ * adw_animation_set_target:
  * @self: an animation
  * @target: an animation target
  *
  * Sets the target @self animates to @target.
- *
- * Since: 1.0
  */
 void
 adw_animation_set_target (AdwAnimation       *self,
@@ -509,14 +527,12 @@ adw_animation_set_target (AdwAnimation       *self,
 }
 
 /**
- * adw_animation_get_value: (attributes org.gtk.Method.get_property=value)
+ * adw_animation_get_value:
  * @self: an animation
  *
  * Gets the current value of @self.
  *
  * Returns: the current value
- *
- * Since: 1.0
  */
 double
 adw_animation_get_value (AdwAnimation *self)
@@ -531,7 +547,7 @@ adw_animation_get_value (AdwAnimation *self)
 }
 
 /**
- * adw_animation_get_state: (attributes org.gtk.Method.get_property=state)
+ * adw_animation_get_state:
  * @self: an animation
  *
  * Gets the current value of @self.
@@ -540,8 +556,6 @@ adw_animation_get_value (AdwAnimation *self)
  * hasn't been started yet.
  *
  * Returns: the animation value
- *
- * Since: 1.0
  */
 AdwAnimationState
 adw_animation_get_state (AdwAnimation *self)
@@ -574,8 +588,6 @@ adw_animation_get_state (AdwAnimation *self)
  * example, when using [func@GLib.idle_add] and starting an animation
  * immediately afterwards, it's entirely possible that the idle callback will
  * run after the animation has already finished, and not while it's playing.
- *
- * Since: 1.0
  */
 void
 adw_animation_play (AdwAnimation *self)
@@ -604,8 +616,6 @@ adw_animation_play (AdwAnimation *self)
  * Does nothing if the current state of @self isn't `ADW_ANIMATION_PLAYING`.
  *
  * Sets [property@Animation:state] to `ADW_ANIMATION_PAUSED`.
- *
- * Since: 1.0
  */
 void
 adw_animation_pause (AdwAnimation *self)
@@ -643,8 +653,6 @@ adw_animation_pause (AdwAnimation *self)
  * [method@Animation.pause].
  *
  * Sets [property@Animation:state] to `ADW_ANIMATION_PLAYING`.
- *
- * Since: 1.0
  */
 void
 adw_animation_resume (AdwAnimation *self)
@@ -675,8 +683,6 @@ adw_animation_resume (AdwAnimation *self)
  * emitted.
  *
  * Sets [property@Animation:state] to `ADW_ANIMATION_FINISHED`.
- *
- * Since: 1.0
  */
 void
 adw_animation_skip (AdwAnimation *self)
@@ -720,8 +726,6 @@ adw_animation_skip (AdwAnimation *self)
  * Resets the animation for @self.
  *
  * Sets [property@Animation:state] to `ADW_ANIMATION_IDLE`.
- *
- * Since: 1.0
  */
 void
 adw_animation_reset (AdwAnimation *self)
@@ -753,4 +757,68 @@ adw_animation_reset (AdwAnimation *self)
 
   if (was_playing)
     g_object_unref (self);
+}
+
+/**
+ * adw_animation_get_follow_enable_animations_setting:
+ * @self: an animation
+ *
+ * Gets whether @self should be skipped when animations are globally disabled.
+ *
+ * Returns: whether to follow the global setting
+ *
+ * Since: 1.3
+ */
+gboolean
+adw_animation_get_follow_enable_animations_setting (AdwAnimation *self)
+{
+  AdwAnimationPrivate *priv;
+
+  g_return_val_if_fail (ADW_IS_ANIMATION (self), FALSE);
+
+  priv = adw_animation_get_instance_private (self);
+
+  return priv->follow_enable_animations_setting;
+}
+
+/**
+ * adw_animation_set_follow_enable_animations_setting:
+ * @self: an animation
+ * @setting: whether to follow the global setting
+ *
+ * Sets whether to skip @self when animations are globally disabled.
+ *
+ * The default behavior is to skip the animation. Set to `FALSE` to disable this
+ * behavior.
+ *
+ * This can be useful for cases where animation is essential, like spinners, or
+ * in demo applications. Most other animations should keep it enabled.
+ *
+ * See [property@Gtk.Settings:gtk-enable-animations].
+ *
+ * Since: 1.3
+ */
+void
+adw_animation_set_follow_enable_animations_setting (AdwAnimation *self,
+                                                    gboolean      setting)
+{
+  AdwAnimationPrivate *priv;
+
+  g_return_if_fail (ADW_IS_ANIMATION (self));
+
+  priv = adw_animation_get_instance_private (self);
+
+  setting = !!setting;
+
+  if (setting == priv->follow_enable_animations_setting)
+    return;
+
+  priv->follow_enable_animations_setting = setting;
+
+  if (setting &&
+      !adw_get_enable_animations (priv->widget) &&
+      priv->state != ADW_ANIMATION_IDLE)
+    adw_animation_skip (g_object_ref (self));
+
+  g_object_notify_by_pspec (G_OBJECT (self), props[PROP_FOLLOW_ENABLE_ANIMATIONS_SETTING]);
 }

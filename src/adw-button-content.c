@@ -3,13 +3,12 @@
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
  *
- * Author: Alexander Mikhaylenko <alexander.mikhaylenko@puri.sm>
+ * Author: Alice Mikhaylenko <alice.mikhaylenko@puri.sm>
  */
 
 #include "config.h"
 #include "adw-button-content.h"
 
-#include "adw-macros-private.h"
 #include "adw-split-button.h"
 
 /**
@@ -47,12 +46,13 @@
  *
  * ```
  * buttoncontent
- * ├── image
- * ╰── label
+ * ╰── box
+ *     ├── image
+ *     ╰── label
  * ```
  *
- * `AdwButtonContent`'s CSS node is called `buttoncontent`. It contains the
- * subnodes `image` and `label`.
+ * `AdwButtonContent`'s CSS node is called `buttoncontent`. It contains a `box`
+ * subnode that serves as a container for the  `image` and `label` nodes.
  *
  * When inside a `GtkButton` or `AdwSplitButton`, the button will receive the
  * `.image-text-button` style class. When inside a `GtkMenuButton`, the
@@ -61,17 +61,17 @@
  * ## Accessibility
  *
  * `AdwButtonContent` uses the `GTK_ACCESSIBLE_ROLE_GROUP` role.
- *
- * Since: 1.0
  */
 
 struct _AdwButtonContent {
   GtkWidget parent_instance;
 
+  GtkWidget *box;
   GtkWidget *icon;
   GtkWidget *label;
 
   char *icon_name;
+  gboolean can_shrink;
 
   GtkWidget *button;
 };
@@ -83,6 +83,7 @@ enum {
   PROP_ICON_NAME,
   PROP_LABEL,
   PROP_USE_UNDERLINE,
+  PROP_CAN_SHRINK,
   LAST_PROP
 };
 
@@ -135,8 +136,9 @@ adw_button_content_dispose (GObject *object)
 {
   AdwButtonContent *self = ADW_BUTTON_CONTENT (object);
 
-  g_clear_pointer (&self->icon, gtk_widget_unparent);
-  g_clear_pointer (&self->label, gtk_widget_unparent);
+  self->icon = NULL;
+  self->label = NULL;
+  g_clear_pointer (&self->box, gtk_widget_unparent);
 
   G_OBJECT_CLASS (adw_button_content_parent_class)->dispose (object);
 }
@@ -169,6 +171,9 @@ adw_button_content_get_property (GObject    *object,
   case PROP_USE_UNDERLINE:
     g_value_set_boolean (value, adw_button_content_get_use_underline (self));
     break;
+  case PROP_CAN_SHRINK:
+    g_value_set_boolean (value, adw_button_content_get_can_shrink (self));
+    break;
   default:
     G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
   }
@@ -192,6 +197,9 @@ adw_button_content_set_property (GObject      *object,
   case PROP_USE_UNDERLINE:
     adw_button_content_set_use_underline (self, g_value_get_boolean (value));
     break;
+  case PROP_CAN_SHRINK:
+    adw_button_content_set_can_shrink (self, g_value_get_boolean (value));
+    break;
   default:
     G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
   }
@@ -212,13 +220,11 @@ adw_button_content_class_init (AdwButtonContentClass *klass)
   widget_class->unroot = adw_button_content_unroot;
 
   /**
-   * AdwButtonContent:icon-name: (attributes org.gtk.Property.get=adw_button_content_get_icon_name org.gtk.Property.set=adw_button_content_set_icon_name)
+   * AdwButtonContent:icon-name:
    *
    * The name of the displayed icon.
    *
    * If empty, the icon is not shown.
-   *
-   * Since: 1.0
    */
   props[PROP_ICON_NAME] =
     g_param_spec_string ("icon-name", NULL, NULL,
@@ -226,11 +232,9 @@ adw_button_content_class_init (AdwButtonContentClass *klass)
                          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
   /**
-   * AdwButtonContent:label: (attributes org.gtk.Property.get=adw_button_content_get_label org.gtk.Property.set=adw_button_content_set_label)
+   * AdwButtonContent:label:
    *
    * The displayed label.
-   *
-   * Since: 1.0
    */
   props[PROP_LABEL] =
     g_param_spec_string ("label", NULL, NULL,
@@ -238,24 +242,38 @@ adw_button_content_class_init (AdwButtonContentClass *klass)
                          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
   /**
-   * AdwButtonContent:use-underline: (attributes org.gtk.Property.get=adw_button_content_get_use_underline org.gtk.Property.set=adw_button_content_set_use_underline)
+   * AdwButtonContent:use-underline:
    *
    * Whether an underline in the text indicates a mnemonic.
    *
    * The mnemonic can be used to activate the parent button.
    *
    * See [property@ButtonContent:label].
-   *
-   * Since: 1.0
    */
   props[PROP_USE_UNDERLINE] =
     g_param_spec_boolean ("use-underline", NULL, NULL,
                           FALSE,
                           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
+  /**
+   * AdwButtonContent:can-shrink:
+   *
+   * Whether the button can be smaller than the natural size of its contents.
+   *
+   * If set to `TRUE`, the label will ellipsize.
+   *
+   * See [property@Gtk.Button:can-shrink].
+   *
+   * Since: 1.4
+   */
+  props[PROP_CAN_SHRINK] =
+    g_param_spec_boolean ("can-shrink", NULL, NULL,
+                          FALSE,
+                          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
+
   g_object_class_install_properties (object_class, LAST_PROP, props);
 
-  gtk_widget_class_set_layout_manager_type (widget_class, GTK_TYPE_BOX_LAYOUT);
+  gtk_widget_class_set_layout_manager_type (widget_class, GTK_TYPE_BIN_LAYOUT);
   gtk_widget_class_set_css_name (widget_class, "buttoncontent");
   gtk_widget_class_set_accessible_role (widget_class, GTK_ACCESSIBLE_ROLE_GROUP);
 }
@@ -267,6 +285,9 @@ adw_button_content_init (AdwButtonContent *self)
 
   gtk_widget_set_hexpand (GTK_WIDGET (self), FALSE);
 
+  self->box = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0);
+  gtk_widget_set_halign (self->box, GTK_ALIGN_CENTER);
+
   self->icon = g_object_new (GTK_TYPE_IMAGE,
                              "accessible-role", GTK_ACCESSIBLE_ROLE_PRESENTATION,
                              NULL);
@@ -276,10 +297,11 @@ adw_button_content_init (AdwButtonContent *self)
 
   self->label = gtk_label_new (NULL);
   gtk_widget_set_hexpand (self->label, TRUE);
-  gtk_widget_hide (self->label);
+  gtk_widget_set_visible (self->label, FALSE);
 
-  gtk_widget_set_parent (self->icon, GTK_WIDGET (self));
-  gtk_widget_set_parent (self->label, GTK_WIDGET (self));
+  gtk_box_append (GTK_BOX (self->box), self->icon);
+  gtk_box_append (GTK_BOX (self->box), self->label);
+  gtk_widget_set_parent (self->box, GTK_WIDGET (self));
 }
 
 /**
@@ -288,8 +310,6 @@ adw_button_content_init (AdwButtonContent *self)
  * Creates a new `AdwButtonContent`.
  *
  * Returns: the new created `AdwButtonContent`
- *
- * Since: 1.0
  */
 GtkWidget *
 adw_button_content_new (void)
@@ -298,14 +318,12 @@ adw_button_content_new (void)
 }
 
 /**
- * adw_button_content_get_icon_name: (attributes org.gtk.Method.get_property=icon-name)
+ * adw_button_content_get_icon_name:
  * @self: a button content
  *
  * Gets the name of the displayed icon.
  *
  * Returns: the icon name
- *
- * Since: 1.0
  */
 const char *
 adw_button_content_get_icon_name (AdwButtonContent *self)
@@ -316,15 +334,13 @@ adw_button_content_get_icon_name (AdwButtonContent *self)
 }
 
 /**
- * adw_button_content_set_icon_name: (attributes org.gtk.Method.set_property=icon-name)
+ * adw_button_content_set_icon_name:
  * @self: a button content
  * @icon_name: the new icon name
  *
  * Sets the name of the displayed icon.
  *
  * If empty, the icon is not shown.
- *
- * Since: 1.0
  */
 void
 adw_button_content_set_icon_name (AdwButtonContent *self,
@@ -333,11 +349,8 @@ adw_button_content_set_icon_name (AdwButtonContent *self,
   g_return_if_fail (ADW_IS_BUTTON_CONTENT (self));
   g_return_if_fail (icon_name != NULL);
 
-  if (!g_strcmp0 (icon_name, adw_button_content_get_icon_name (self)))
+  if (!g_set_str (&self->icon_name, icon_name))
     return;
-
-  g_free (self->icon_name);
-  self->icon_name = g_strdup (icon_name);
 
   if (!icon_name[0])
     icon_name = "image-missing";
@@ -348,14 +361,12 @@ adw_button_content_set_icon_name (AdwButtonContent *self,
 }
 
 /**
- * adw_button_content_get_label: (attributes org.gtk.Method.get_property=label)
+ * adw_button_content_get_label:
  * @self: a button content
  *
  * Gets the displayed label.
  *
  * Returns: the label
- *
- * Since: 1.0
  */
 const char *
 adw_button_content_get_label (AdwButtonContent *self)
@@ -366,13 +377,11 @@ adw_button_content_get_label (AdwButtonContent *self)
 }
 
 /**
- * adw_button_content_set_label: (attributes org.gtk.Method.set_property=label)
+ * adw_button_content_set_label:
  * @self: a button content
  * @label: the new label
  *
  * Sets the displayed label.
- *
- * Since: 1.0
  */
 void
 adw_button_content_set_label (AdwButtonContent *self,
@@ -393,14 +402,12 @@ adw_button_content_set_label (AdwButtonContent *self,
 }
 
 /**
- * adw_button_content_get_use_underline: (attributes org.gtk.Method.get_property=use-underline)
+ * adw_button_content_get_use_underline:
  * @self: a button content
  *
  * Gets whether an underline in the text indicates a mnemonic.
  *
  * Returns: whether an underline in the text indicates a mnemonic
- *
- * Since: 1.0
  */
 gboolean
 adw_button_content_get_use_underline (AdwButtonContent *self)
@@ -411,7 +418,7 @@ adw_button_content_get_use_underline (AdwButtonContent *self)
 }
 
 /**
- * adw_button_content_set_use_underline: (attributes org.gtk.Method.set_property=use-underline)
+ * adw_button_content_set_use_underline:
  * @self: a button content
  * @use_underline: whether an underline in the text indicates a mnemonic
  *
@@ -420,8 +427,6 @@ adw_button_content_get_use_underline (AdwButtonContent *self)
  * The mnemonic can be used to activate the parent button.
  *
  * See [property@ButtonContent:label].
- *
- * Since: 1.0
  */
 void
 adw_button_content_set_use_underline (AdwButtonContent *self,
@@ -438,3 +443,53 @@ adw_button_content_set_use_underline (AdwButtonContent *self,
 
   g_object_notify_by_pspec (G_OBJECT (self), props[PROP_USE_UNDERLINE]);
 }
+
+/**
+ * adw_button_content_get_can_shrink:
+ * @self: a button content
+ *
+ * gets whether the button can be smaller than the natural size of its contents.
+ *
+ * Returns: whether the button can shrink
+ *
+ * Since: 1.4
+ */
+gboolean
+adw_button_content_get_can_shrink (AdwButtonContent *self)
+{
+  g_return_val_if_fail (ADW_IS_BUTTON_CONTENT (self), FALSE);
+
+  return gtk_label_get_ellipsize (GTK_LABEL (self->label)) != PANGO_ELLIPSIZE_NONE;
+}
+
+/**
+ * adw_button_content_set_can_shrink:
+ * @self: a button content
+ * @can_shrink: whether the button can shrink
+ *
+ * Sets whether the button can be smaller than the natural size of its contents.
+ *
+ * If set to `TRUE`, the label will ellipsize.
+ *
+ * See [method@Gtk.Button.set_can_shrink].
+ *
+ * Since: 1.4
+ */
+void
+adw_button_content_set_can_shrink (AdwButtonContent *self,
+                                   gboolean          can_shrink)
+{
+  g_return_if_fail (ADW_IS_BUTTON_CONTENT (self));
+
+  can_shrink = !!can_shrink;
+
+  if (can_shrink == adw_button_content_get_can_shrink (self))
+    return;
+
+  gtk_label_set_ellipsize (GTK_LABEL (self->label),
+                           can_shrink ? PANGO_ELLIPSIZE_END
+                                      : PANGO_ELLIPSIZE_NONE);
+
+  g_object_notify_by_pspec (G_OBJECT (self), props[PROP_CAN_SHRINK]);
+}
+

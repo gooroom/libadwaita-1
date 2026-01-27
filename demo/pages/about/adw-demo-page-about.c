@@ -7,13 +7,12 @@ struct _AdwDemoPageAbout
   AdwBin parent_instance;
 };
 
-G_DEFINE_TYPE (AdwDemoPageAbout, adw_demo_page_about, ADW_TYPE_BIN)
+G_DEFINE_FINAL_TYPE (AdwDemoPageAbout, adw_demo_page_about, ADW_TYPE_BIN)
 
 static void
 demo_run_cb (AdwDemoPageAbout *self)
 {
-  GtkRoot *root = gtk_widget_get_root (GTK_WIDGET (self));
-  GtkWidget *about;
+  AdwDialog *about;
 
   const char *developers[] = {
     "Angela Avery <angela@example.org>",
@@ -44,15 +43,14 @@ demo_run_cb (AdwDemoPageAbout *self)
   ";
 
   about =
-    g_object_new (ADW_TYPE_ABOUT_WINDOW,
-                  "transient-for", root,
+    g_object_new (ADW_TYPE_ABOUT_DIALOG,
                   "application-icon", "org.example.Typeset",
                   "application-name", _("Typeset"),
                   "developer-name", _("Angela Avery"),
                   "version", "1.2.3",
                   "release-notes-version", "1.2.0",
                   "release-notes", release_notes,
-                  "comments", _("Typeset is an app that doesn’t exist and is used as an example content for this about window."),
+                  "comments", _("Typeset is an app that doesn’t exist and is used as an example content for this about dialog."),
                   "website", "https://example.org",
                   "issue-url", "https://example.org",
                   "support-url", "https://example.org",
@@ -63,23 +61,26 @@ demo_run_cb (AdwDemoPageAbout *self)
                   "translator-credits", _("translator-credits"),
                   NULL);
 
-  adw_about_window_add_link (ADW_ABOUT_WINDOW (about),
+  adw_about_dialog_add_link (ADW_ABOUT_DIALOG (about),
                              _("_Documentation"),
-                             "https://gnome.pages.gitlab.gnome.org/libadwaita/doc/main/class.AboutWindow.html");
+                             "https://gnome.pages.gitlab.gnome.org/libadwaita/doc/main/class.AboutDialog.html");
 
-  adw_about_window_add_legal_section (ADW_ABOUT_WINDOW (about),
+  adw_about_dialog_add_legal_section (ADW_ABOUT_DIALOG (about),
                                       _("Fonts"),
                                       NULL,
                                       GTK_LICENSE_CUSTOM,
                                       "This application uses font data from <a href='https://example.org'>somewhere</a>.");
 
-  adw_about_window_add_acknowledgement_section (ADW_ABOUT_WINDOW (about),
+  adw_about_dialog_add_acknowledgement_section (ADW_ABOUT_DIALOG (about),
                                                 _("Special thanks to"),
                                                 special_thanks);
 
-  gtk_window_present (GTK_WINDOW (about));
+  adw_about_dialog_add_other_app (ADW_ABOUT_DIALOG (about),
+                                  "org.gnome.Adwaita1.Demo",
+                                  _("Adwaita Demo"),
+                                  _("Tour of the features in Libadwaita"));
 
-  gtk_window_present (GTK_WINDOW (about));
+  adw_dialog_present (about, GTK_WIDGET (self));
 }
 
 static void

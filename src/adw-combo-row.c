@@ -6,7 +6,7 @@
 
 /*
  * Heavily based on GTK 3.99.3 GtkDropDown widget initially written by Matthias
- * Clasen, and heavily modified for libadwaita by Alexander Mikhaylenko on
+ * Clasen, and heavily modified for libadwaita by Alice Mikhaylenko on
  * behalf of Purism SPC 2020.
  */
 
@@ -63,8 +63,6 @@
  * ## Accessibility
  *
  * `AdwComboRow` uses the `GTK_ACCESSIBLE_ROLE_COMBO_BOX` role.
- *
- * Since: 1.0
  */
 
 /*
@@ -77,16 +75,22 @@ typedef struct
   GtkListView *current;
   GtkListView *list;
   GtkPopover *popover;
+  GtkSearchEntry *search_entry;
   gboolean use_subtitle;
+  gboolean enable_search;
 
+  gboolean uses_default_factory;
   GtkListItemFactory *factory;
   GtkListItemFactory *list_factory;
+  GtkListItemFactory *header_factory;
   GListModel *model;
+  GListModel *filter_model;
   GtkSelectionModel *selection;
   GtkSelectionModel *popup_selection;
   GtkSelectionModel *current_selection;
 
   GtkExpression *expression;
+  GtkStringFilterMatchMode search_match_mode;
 } AdwComboRowPrivate;
 
 G_DEFINE_TYPE_WITH_PRIVATE (AdwComboRow, adw_combo_row, ADW_TYPE_ACTION_ROW)
@@ -97,9 +101,12 @@ enum {
   PROP_SELECTED_ITEM,
   PROP_MODEL,
   PROP_FACTORY,
+  PROP_HEADER_FACTORY,
   PROP_LIST_FACTORY,
   PROP_EXPRESSION,
   PROP_USE_SUBTITLE,
+  PROP_ENABLE_SEARCH,
+  PROP_SEARCH_MATCH_MODE,
   LAST_PROP,
 };
 
@@ -131,11 +138,26 @@ selection_changed (AdwComboRow *self)
 {
   AdwComboRowPrivate *priv = adw_combo_row_get_instance_private (self);
   guint selected;
+  GtkFilter *filter;
 
   if (!GTK_IS_SINGLE_SELECTION (priv->selection))
     return;
 
   selected = gtk_single_selection_get_selected (GTK_SINGLE_SELECTION (priv->selection));
+
+  /* reset the filter so positions are 1-1 */
+  filter = gtk_filter_list_model_get_filter (GTK_FILTER_LIST_MODEL (priv->filter_model));
+  if (GTK_IS_STRING_FILTER (filter))
+    gtk_string_filter_set_search (GTK_STRING_FILTER (filter), "");
+  gtk_single_selection_set_selected (GTK_SINGLE_SELECTION (priv->popup_selection), selected);
+
+  g_object_notify_by_pspec (G_OBJECT (self), props[PROP_SELECTED]);
+}
+
+static void
+selection_item_changed (AdwComboRow *self)
+{
+  AdwComboRowPrivate *priv = adw_combo_row_get_instance_private (self);
 
   if (priv->use_subtitle) {
     if (g_list_model_get_n_items (G_LIST_MODEL (priv->current_selection)) > 0) {
@@ -151,9 +173,6 @@ selection_changed (AdwComboRow *self)
     }
   }
 
-  gtk_single_selection_set_selected (GTK_SINGLE_SELECTION (priv->popup_selection), selected);
-
-  g_object_notify_by_pspec (G_OBJECT (self), props[PROP_SELECTED]);
   g_object_notify_by_pspec (G_OBJECT (self), props[PROP_SELECTED_ITEM]);
 }
 
@@ -163,7 +182,6 @@ model_changed (AdwComboRow *self)
   AdwComboRowPrivate *priv = adw_combo_row_get_instance_private (self);
   guint n_items = priv->model ? g_list_model_get_n_items (priv->model) : 0;
 
-  gtk_widget_set_sensitive (GTK_WIDGET (self), n_items > 0);
   gtk_widget_set_visible (priv->arrow_box, n_items > 1);
   gtk_list_box_row_set_activatable (GTK_LIST_BOX_ROW (self), n_items > 1);
 }
@@ -172,9 +190,14 @@ static void
 row_activated_cb (AdwComboRow *self)
 {
   AdwComboRowPrivate *priv = adw_combo_row_get_instance_private (self);
+  GtkFilter *filter;
 
   gtk_popover_popdown (GTK_POPOVER (priv->popover));
 
+  /* reset the filter so positions are 1-1 */
+  filter = gtk_filter_list_model_get_filter (GTK_FILTER_LIST_MODEL (priv->filter_model));
+  if (GTK_IS_STRING_FILTER (filter))
+    gtk_string_filter_set_search (GTK_STRING_FILTER (filter), "");
   adw_combo_row_set_selected (self, gtk_single_selection_get_selected (GTK_SINGLE_SELECTION (priv->popup_selection)));
 }
 
@@ -183,10 +206,64 @@ notify_popover_visible_cb (AdwComboRow *self)
 {
   AdwComboRowPrivate *priv = adw_combo_row_get_instance_private (self);
 
-  if (gtk_widget_get_visible (GTK_WIDGET (priv->popover)))
+  if (gtk_widget_get_visible (GTK_WIDGET (priv->popover))) {
     gtk_widget_add_css_class (GTK_WIDGET (self), "has-open-popup");
-  else
+  } else {
     gtk_widget_remove_css_class (GTK_WIDGET (self), "has-open-popup");
+    gtk_editable_set_text (GTK_EDITABLE (priv->search_entry), "");
+  }
+}
+
+static void
+update_filter (AdwComboRow *self)
+{
+  AdwComboRowPrivate *priv = adw_combo_row_get_instance_private (self);
+
+  if (priv->filter_model) {
+    GtkFilter *filter;
+
+    if (priv->expression) {
+      filter = GTK_FILTER (gtk_string_filter_new (gtk_expression_ref (priv->expression)));
+      gtk_string_filter_set_match_mode (GTK_STRING_FILTER (filter), priv->search_match_mode);
+    } else {
+      filter = GTK_FILTER (gtk_every_filter_new ());
+    }
+
+    gtk_filter_list_model_set_filter (GTK_FILTER_LIST_MODEL (priv->filter_model), filter);
+    g_object_unref (filter);
+  }
+}
+
+static void
+search_changed_cb (GtkSearchEntry *entry,
+                   AdwComboRow    *self)
+{
+  AdwComboRowPrivate *priv = adw_combo_row_get_instance_private (self);
+  const char *text;
+  GtkFilter *filter;
+
+  text = gtk_editable_get_text (GTK_EDITABLE (entry));
+
+  filter = gtk_filter_list_model_get_filter (GTK_FILTER_LIST_MODEL (priv->filter_model));
+  if (GTK_IS_STRING_FILTER (filter))
+    gtk_string_filter_set_search (GTK_STRING_FILTER (filter), text);
+}
+
+static void
+search_stop_cb (GtkSearchEntry *entry,
+                AdwComboRow    *self)
+{
+  AdwComboRowPrivate *priv = adw_combo_row_get_instance_private (self);
+
+  GtkFilter *filter;
+
+  filter = gtk_filter_list_model_get_filter (GTK_FILTER_LIST_MODEL (priv->filter_model));
+  if (GTK_IS_STRING_FILTER (filter)) {
+    if (gtk_string_filter_get_search (GTK_STRING_FILTER (filter)))
+      gtk_string_filter_set_search (GTK_STRING_FILTER (filter), NULL);
+    else
+      gtk_popover_popdown (GTK_POPOVER (priv->popover));
+  }
 }
 
 static void
@@ -214,10 +291,14 @@ setup_item (GtkSignalListItemFactory *factory,
   gtk_label_set_xalign (GTK_LABEL (label), 0.0);
   gtk_label_set_ellipsize (GTK_LABEL (label), PANGO_ELLIPSIZE_END);
   gtk_label_set_max_width_chars (GTK_LABEL (label), 20);
+  gtk_label_set_width_chars (GTK_LABEL (label), 1);
   gtk_widget_set_valign (label, GTK_ALIGN_CENTER);
   gtk_box_append (GTK_BOX (box), label);
 
-  icon = gtk_image_new_from_icon_name ("object-select-symbolic");
+  icon = g_object_new (GTK_TYPE_IMAGE,
+                       "accessible-role", GTK_ACCESSIBLE_ROLE_PRESENTATION,
+                       "icon-name", "object-select-symbolic",
+                       NULL);
   gtk_box_append (GTK_BOX (box), icon);
 
   gtk_list_item_set_child (list_item, box);
@@ -241,19 +322,32 @@ selected_item_changed (AdwComboRow *self,
 }
 
 static void
+root_changed (GtkWidget   *box,
+              GParamSpec  *pspec,
+              AdwComboRow *self)
+{
+  AdwComboRowPrivate *priv = adw_combo_row_get_instance_private (self);
+  GtkWidget *icon;
+
+  icon = gtk_widget_get_last_child (box);
+
+  if (gtk_widget_get_ancestor (box, GTK_TYPE_POPOVER) == GTK_WIDGET (priv->popover))
+    gtk_widget_set_visible (icon, TRUE);
+  else
+    gtk_widget_set_visible (icon, FALSE);
+}
+
+static void
 bind_item (GtkSignalListItemFactory *factory,
            GtkListItem              *list_item,
            AdwComboRow              *self)
 {
-  AdwComboRowPrivate *priv = adw_combo_row_get_instance_private (self);
   gpointer item;
   GtkWidget *box;
-  GtkWidget *icon;
   char *repr;
 
   item = gtk_list_item_get_item (list_item);
   box = gtk_list_item_get_child (list_item);
-  icon = gtk_widget_get_last_child (box);
 
   repr = get_item_representation (self, item);
 
@@ -265,14 +359,13 @@ bind_item (GtkSignalListItemFactory *factory,
     g_critical ("Either AdwComboRow:factory or AdwComboRow:expression must be set");
   }
 
-  if (gtk_widget_get_ancestor (box, GTK_TYPE_POPOVER) == GTK_WIDGET (priv->popover)) {
-    gtk_widget_show (icon);
-    g_signal_connect (self, "notify::selected-item",
-                      G_CALLBACK (selected_item_changed), list_item);
-    selected_item_changed (self, NULL, list_item);
-  } else {
-    gtk_widget_hide (icon);
-  }
+  g_signal_connect (self, "notify::selected-item",
+                    G_CALLBACK (selected_item_changed), list_item);
+  selected_item_changed (self, NULL, list_item);
+
+  g_signal_connect (box, "notify::root",
+                    G_CALLBACK (root_changed), self);
+  root_changed (box, NULL, self);
 
   g_clear_pointer (&repr, g_free);
 }
@@ -282,7 +375,32 @@ unbind_item (GtkSignalListItemFactory *factory,
              GtkListItem              *list_item,
              AdwComboRow              *self)
 {
+  GtkWidget *box;
+
+  box = gtk_list_item_get_child (list_item);
+
   g_signal_handlers_disconnect_by_func (self, selected_item_changed, list_item);
+  g_signal_handlers_disconnect_by_func (box, root_changed, self);
+}
+
+static void
+set_factory (AdwComboRow        *self,
+             GtkListItemFactory *factory,
+             gboolean            is_default)
+{
+  AdwComboRowPrivate *priv = adw_combo_row_get_instance_private (self);
+
+  if (!g_set_object (&priv->factory, factory))
+    return;
+
+  gtk_list_view_set_factory (priv->current, factory);
+
+  priv->uses_default_factory = is_default;
+
+  if (priv->list_factory == NULL)
+    gtk_list_view_set_factory (priv->list, factory);
+
+  g_object_notify_by_pspec (G_OBJECT (self), props[PROP_FACTORY]);
 }
 
 static void
@@ -294,7 +412,7 @@ set_default_factory (AdwComboRow *self)
   g_signal_connect (factory, "bind", G_CALLBACK (bind_item), self);
   g_signal_connect (factory, "unbind", G_CALLBACK (unbind_item), self);
 
-  adw_combo_row_set_factory (self, factory);
+  set_factory (self, factory, TRUE);
 
   g_object_unref (factory);
 }
@@ -320,6 +438,9 @@ adw_combo_row_get_property (GObject    *object,
   case PROP_FACTORY:
     g_value_set_object (value, adw_combo_row_get_factory (self));
     break;
+  case PROP_HEADER_FACTORY:
+    g_value_set_object (value, adw_combo_row_get_header_factory (self));
+    break;
   case PROP_LIST_FACTORY:
     g_value_set_object (value, adw_combo_row_get_list_factory (self));
     break;
@@ -328,6 +449,12 @@ adw_combo_row_get_property (GObject    *object,
     break;
   case PROP_USE_SUBTITLE:
     g_value_set_boolean (value, adw_combo_row_get_use_subtitle (self));
+    break;
+  case PROP_ENABLE_SEARCH:
+    g_value_set_boolean (value, adw_combo_row_get_enable_search (self));
+    break;
+  case PROP_SEARCH_MATCH_MODE:
+    g_value_set_enum (value, adw_combo_row_get_search_match_mode (self));
     break;
   default:
     G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -355,11 +482,20 @@ adw_combo_row_set_property (GObject      *object,
   case PROP_LIST_FACTORY:
     adw_combo_row_set_list_factory (self, g_value_get_object (value));
     break;
+  case PROP_HEADER_FACTORY:
+    adw_combo_row_set_header_factory (self, g_value_get_object (value));
+    break;
   case PROP_EXPRESSION:
     adw_combo_row_set_expression (self, gtk_value_get_expression (value));
     break;
   case PROP_USE_SUBTITLE:
     adw_combo_row_set_use_subtitle (self, g_value_get_boolean (value));
+    break;
+  case PROP_ENABLE_SEARCH:
+    adw_combo_row_set_enable_search (self, g_value_get_boolean (value));
+    break;
+  case PROP_SEARCH_MATCH_MODE:
+    adw_combo_row_set_search_match_mode (self, g_value_get_enum (value));
     break;
   default:
     G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -377,6 +513,7 @@ adw_combo_row_dispose (GObject *object)
 
   if (priv->selection) {
     g_signal_handlers_disconnect_by_func (priv->selection, selection_changed, self);
+    g_signal_handlers_disconnect_by_func (priv->selection, selection_item_changed, self);
     g_signal_handlers_disconnect_by_func (priv->selection, model_changed, self);
   }
 
@@ -386,6 +523,8 @@ adw_combo_row_dispose (GObject *object)
   g_clear_object (&priv->current_selection);
   g_clear_object (&priv->factory);
   g_clear_object (&priv->list_factory);
+  g_clear_object (&priv->header_factory);
+  g_clear_object (&priv->filter_model);
 
   g_clear_object (&priv->model);
 
@@ -436,14 +575,12 @@ adw_combo_row_class_init (AdwComboRowClass *klass)
   row_class->activate = adw_combo_row_activate;
 
   /**
-   * AdwComboRow:selected: (attributes org.gtk.Property.get=adw_combo_row_get_selected org.gtk.Property.set=adw_combo_row_set_selected)
+   * AdwComboRow:selected:
    *
    * The position of the selected item.
    *
    * If no item is selected, the property has the value
    * [const@Gtk.INVALID_LIST_POSITION]
-   *
-   * Since: 1.0
    */
   props[PROP_SELECTED] =
     g_param_spec_uint ("selected", NULL, NULL,
@@ -451,11 +588,9 @@ adw_combo_row_class_init (AdwComboRowClass *klass)
                        G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
   /**
-   * AdwComboRow:selected-item: (attributes org.gtk.Property.get=adw_combo_row_get_selected_item)
+   * AdwComboRow:selected-item:
    *
    * The selected item.
-   *
-   * Since: 1.0
    */
   props[PROP_SELECTED_ITEM] =
     g_param_spec_object ("selected-item", NULL, NULL,
@@ -463,11 +598,9 @@ adw_combo_row_class_init (AdwComboRowClass *klass)
                          G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
 
   /**
-   * AdwComboRow:model: (attributes org.gtk.Property.get=adw_combo_row_get_model org.gtk.Property.set=adw_combo_row_set_model)
+   * AdwComboRow:model:
    *
    * The model that provides the displayed items.
-   *
-   * Since: 1.0
    */
   props[PROP_MODEL] =
     g_param_spec_object ("model", NULL, NULL,
@@ -475,14 +608,12 @@ adw_combo_row_class_init (AdwComboRowClass *klass)
                          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
   /**
-   * AdwComboRow:factory: (attributes org.gtk.Property.get=adw_combo_row_get_factory org.gtk.Property.set=adw_combo_row_set_factory)
+   * AdwComboRow:factory:
    *
    * Factory for populating list items.
    *
    * This factory is always used for the item in the row. It is also used for
    * items in the popup unless [property@ComboRow:list-factory] is set.
-   *
-   * Since: 1.0
    */
   props[PROP_FACTORY] =
     g_param_spec_object ("factory", NULL, NULL,
@@ -490,13 +621,23 @@ adw_combo_row_class_init (AdwComboRowClass *klass)
                          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
   /**
-   * AdwComboRow:list-factory: (attributes org.gtk.Property.get=adw_combo_row_get_list_factory org.gtk.Property.set=adw_combo_row_set_list_factory)
+   * AdwComboRow:header-factory:
+   *
+   * The factory for creating header widgets for the popup.
+   *
+   * Since: 1.6
+   */
+  props[PROP_HEADER_FACTORY] =
+    g_param_spec_object ("header-factory", NULL, NULL,
+                         GTK_TYPE_LIST_ITEM_FACTORY,
+                         G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
+
+  /**
+   * AdwComboRow:list-factory:
    *
    * The factory for populating list items in the popup.
    *
    * If this is not set, [property@ComboRow:factory] is used.
-   *
-   * Since: 1.0
    */
   props[PROP_LIST_FACTORY] =
     g_param_spec_object ("list-factory", NULL, NULL,
@@ -504,7 +645,7 @@ adw_combo_row_class_init (AdwComboRowClass *klass)
                          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
   /**
-   * AdwComboRow:expression: (type GtkExpression) (attributes org.gtk.Property.get=adw_combo_row_get_expression org.gtk.Property.set=adw_combo_row_set_expression)
+   * AdwComboRow:expression: (type GtkExpression)
    *
    * An expression used to obtain strings from items.
    *
@@ -513,8 +654,6 @@ adw_combo_row_class_init (AdwComboRowClass *klass)
    * It's used to bind strings to labels produced by the default factory if
    * [property@ComboRow:factory] is not set, or when
    * [property@ComboRow:use-subtitle] is set to `TRUE`.
-   *
-   * Since: 1.0
    */
   props[PROP_EXPRESSION] =
     gtk_param_spec_expression ("expression",
@@ -523,7 +662,7 @@ adw_combo_row_class_init (AdwComboRowClass *klass)
                                G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
   /**
-   * AdwComboRow:use-subtitle: (attributes org.gtk.Property.get=adw_combo_row_get_use_subtitle org.gtk.Property.set=adw_combo_row_set_use_subtitle)
+   * AdwComboRow:use-subtitle:
    *
    * Whether to use the current value as the subtitle.
    *
@@ -534,13 +673,41 @@ adw_combo_row_class_init (AdwComboRowClass *klass)
    *
    * The subtitle is interpreted as Pango markup if
    * [property@PreferencesRow:use-markup] is set to `TRUE`.
-   *
-   * Since: 1.0
    */
   props[PROP_USE_SUBTITLE] =
     g_param_spec_boolean ("use-subtitle", NULL, NULL,
                           FALSE,
                           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
+
+  /**
+   * AdwComboRow:enable-search:
+   *
+   * Whether to show a search entry in the popup.
+   *
+   * If set to `TRUE`, a search entry will be shown in the popup that
+   * allows to search for items in the list.
+   * 
+   * Search requires [property@ComboRow:expression] to be set.
+   * 
+   * Since: 1.4
+   */
+  props[PROP_ENABLE_SEARCH] =
+    g_param_spec_boolean ("enable-search", NULL, NULL,
+                          FALSE,
+                          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
+
+  /**
+   * AdwComboRow:search-match-mode:
+   *
+   * The match mode for the search filter.
+   *
+   * Since: 1.6
+   */
+  props[PROP_SEARCH_MATCH_MODE] =
+    g_param_spec_enum  ("search-match-mode", NULL, NULL,
+                        GTK_TYPE_STRING_FILTER_MATCH_MODE,
+                        GTK_STRING_FILTER_MATCH_MODE_PREFIX,
+                        G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
   g_object_class_install_properties (object_class, LAST_PROP, props);
 
@@ -550,8 +717,11 @@ adw_combo_row_class_init (AdwComboRowClass *klass)
   gtk_widget_class_bind_template_child_private (widget_class, AdwComboRow, arrow_box);
   gtk_widget_class_bind_template_child_private (widget_class, AdwComboRow, list);
   gtk_widget_class_bind_template_child_private (widget_class, AdwComboRow, popover);
+  gtk_widget_class_bind_template_child_private (widget_class, AdwComboRow, search_entry);
   gtk_widget_class_bind_template_callback (widget_class, row_activated_cb);
   gtk_widget_class_bind_template_callback (widget_class, notify_popover_visible_cb);
+  gtk_widget_class_bind_template_callback (widget_class, search_changed_cb);
+  gtk_widget_class_bind_template_callback (widget_class, search_stop_cb);
 
   gtk_widget_class_set_accessible_role (widget_class, GTK_ACCESSIBLE_ROLE_COMBO_BOX);
 }
@@ -559,6 +729,10 @@ adw_combo_row_class_init (AdwComboRowClass *klass)
 static void
 adw_combo_row_init (AdwComboRow *self)
 {
+  AdwComboRowPrivate *priv = adw_combo_row_get_instance_private (self);
+
+  priv->search_match_mode = GTK_STRING_FILTER_MATCH_MODE_PREFIX;
+
   gtk_widget_init_template (GTK_WIDGET (self));
 
   adw_preferences_row_set_use_markup (ADW_PREFERENCES_ROW (self), FALSE);
@@ -572,8 +746,6 @@ adw_combo_row_init (AdwComboRow *self)
  * Creates a new `AdwComboRow`.
  *
  * Returns: the newly created `AdwComboRow`
- *
- * Since: 1.0
  */
 GtkWidget *
 adw_combo_row_new (void)
@@ -582,14 +754,12 @@ adw_combo_row_new (void)
 }
 
 /**
- * adw_combo_row_set_selected: (attributes org.gtk.Method.set_property=selected)
+ * adw_combo_row_set_selected:
  * @self: a combo row
  * @position: the position of the item to select, or
  *   [const@Gtk.INVALID_LIST_POSITION]
  *
  * Selects the item at the given position.
- *
- * Since: 1.0
  */
 void
 adw_combo_row_set_selected (AdwComboRow *self,
@@ -611,15 +781,13 @@ adw_combo_row_set_selected (AdwComboRow *self,
 }
 
 /**
- * adw_combo_row_get_selected: (attributes org.gtk.Method.get_property=selected)
+ * adw_combo_row_get_selected:
  * @self: a combo row
  *
  * Gets the position of the selected item.
  *
  * Returns: the position of the selected item, or
  *   [const@Gtk.INVALID_LIST_POSITION] if no item is selected
- *
- * Since: 1.0
  */
 guint
 adw_combo_row_get_selected (AdwComboRow *self)
@@ -637,14 +805,12 @@ adw_combo_row_get_selected (AdwComboRow *self)
 }
 
 /**
- * adw_combo_row_get_selected_item: (attributes org.gtk.Method.get_property=selected-item)
+ * adw_combo_row_get_selected_item:
  * @self: a combo row
  *
  * Gets the selected item.
  *
  * Returns: (transfer none) (type GObject) (nullable): the selected item
- *
- * Since: 1.0
  */
 gpointer
 adw_combo_row_get_selected_item (AdwComboRow *self)
@@ -662,14 +828,12 @@ adw_combo_row_get_selected_item (AdwComboRow *self)
 }
 
 /**
- * adw_combo_row_get_model: (attributes org.gtk.Method.get_property=model)
+ * adw_combo_row_get_model:
  * @self: a combo row
  *
  * Gets the model that provides the displayed items.
  *
  * Returns: (nullable) (transfer none): The model in use
- *
- * Since: 1.0
  */
 GListModel *
 adw_combo_row_get_model (AdwComboRow *self)
@@ -684,13 +848,11 @@ adw_combo_row_get_model (AdwComboRow *self)
 }
 
 /**
- * adw_combo_row_set_model: (attributes org.gtk.Method.set_property=model)
+ * adw_combo_row_set_model:
  * @self: a combo row
  * @model: (nullable) (transfer none): the model to use
  *
  * Sets the model that provides the displayed items.
- *
- * Since: 1.0
  */
 void
 adw_combo_row_set_model (AdwComboRow *self,
@@ -712,6 +874,7 @@ adw_combo_row_set_model (AdwComboRow *self,
 
     if (priv->selection) {
       g_signal_handlers_disconnect_by_func (priv->selection, selection_changed, self);
+      g_signal_handlers_disconnect_by_func (priv->selection, selection_item_changed, self);
       g_signal_handlers_disconnect_by_func (priv->selection, model_changed, self);
     }
 
@@ -720,9 +883,15 @@ adw_combo_row_set_model (AdwComboRow *self,
     g_clear_object (&priv->current_selection);
   } else {
     GtkSelectionModel *selection;
+    GListModel *filter_model;
     GListModel *current_model;
 
-    selection = GTK_SELECTION_MODEL (gtk_single_selection_new (g_object_ref (model)));
+    filter_model = G_LIST_MODEL (gtk_filter_list_model_new (g_object_ref (model), NULL));
+    g_set_object (&priv->filter_model, filter_model);
+
+    update_filter (self);
+
+    selection = GTK_SELECTION_MODEL (gtk_single_selection_new (g_object_ref (filter_model)));
     g_set_object (&priv->popup_selection, selection);
     gtk_list_view_set_model (priv->list, selection);
     g_object_unref (selection);
@@ -731,6 +900,8 @@ adw_combo_row_set_model (AdwComboRow *self,
     g_set_object (&priv->selection, selection);
     g_object_unref (selection);
 
+    g_object_unref (filter_model);
+
     current_model = G_LIST_MODEL (gtk_selection_filter_model_new (priv->selection));
     selection = GTK_SELECTION_MODEL (gtk_no_selection_new (current_model));
     g_set_object (&priv->current_selection, selection);
@@ -738,9 +909,11 @@ adw_combo_row_set_model (AdwComboRow *self,
     g_object_unref (selection);
 
     g_signal_connect_swapped (priv->selection, "notify::selected", G_CALLBACK (selection_changed), self);
+    g_signal_connect_swapped (priv->selection, "notify::selected-item", G_CALLBACK (selection_item_changed), self);
     g_signal_connect_swapped (priv->selection, "items-changed", G_CALLBACK (model_changed), self);
 
     selection_changed (self);
+    selection_item_changed (self);
     model_changed (self);
   }
 
@@ -748,14 +921,12 @@ adw_combo_row_set_model (AdwComboRow *self,
 }
 
 /**
- * adw_combo_row_get_factory: (attributes org.gtk.Method.get_property=factory)
+ * adw_combo_row_get_factory:
  * @self: a combo row
  *
  * Gets the factory for populating list items.
  *
  * Returns: (nullable) (transfer none): the factory in use
- *
- * Since: 1.0
  */
 GtkListItemFactory *
 adw_combo_row_get_factory (AdwComboRow *self)
@@ -770,7 +941,7 @@ adw_combo_row_get_factory (AdwComboRow *self)
 }
 
 /**
- * adw_combo_row_set_factory: (attributes org.gtk.Method.set_property=factory)
+ * adw_combo_row_set_factory:
  * @self: a combo row
  * @factory: (nullable) (transfer none): the factory to use
  *
@@ -778,12 +949,51 @@ adw_combo_row_get_factory (AdwComboRow *self)
  *
  * This factory is always used for the item in the row. It is also used for
  * items in the popup unless [property@ComboRow:list-factory] is set.
- *
- * Since: 1.0
  */
 void
 adw_combo_row_set_factory (AdwComboRow        *self,
                            GtkListItemFactory *factory)
+{
+  g_return_if_fail (ADW_IS_COMBO_ROW (self));
+  g_return_if_fail (factory == NULL || GTK_LIST_ITEM_FACTORY (factory));
+
+  set_factory (self, factory, FALSE);
+}
+
+/**
+ * adw_combo_row_get_header_factory:
+ * @self: a combo row
+ *
+ * Gets the factory that's currently used to create header widgets for the popup.
+ *
+ * Returns: (nullable) (transfer none): The factory in use
+ *
+ * Since: 1.6
+ */
+GtkListItemFactory *
+adw_combo_row_get_header_factory (AdwComboRow *self)
+{
+  AdwComboRowPrivate *priv;
+
+  g_return_val_if_fail (ADW_IS_COMBO_ROW (self), NULL);
+
+  priv = adw_combo_row_get_instance_private (self);
+
+  return priv->header_factory;
+}
+
+/**
+ * adw_combo_row_set_header_factory:
+ * @self: a combo row
+ * @factory: (nullable) (transfer none): the factory to use
+ *
+ * Sets the factory to use for creating header widgets for the popup.
+ *
+ * Since: 1.6
+ */
+void
+adw_combo_row_set_header_factory (AdwComboRow        *self,
+                                  GtkListItemFactory *factory)
 {
   AdwComboRowPrivate *priv;
 
@@ -792,26 +1002,21 @@ adw_combo_row_set_factory (AdwComboRow        *self,
 
   priv = adw_combo_row_get_instance_private (self);
 
-  if (!g_set_object (&priv->factory, factory))
+  if (!g_set_object (&priv->header_factory, factory))
     return;
 
-  gtk_list_view_set_factory (priv->current, factory);
+  gtk_list_view_set_header_factory (GTK_LIST_VIEW (priv->list), priv->header_factory);
 
-  if (priv->list_factory == NULL)
-    gtk_list_view_set_factory (priv->list, factory);
-
-  g_object_notify_by_pspec (G_OBJECT (self), props[PROP_FACTORY]);
+  g_object_notify_by_pspec (G_OBJECT (self), props[PROP_HEADER_FACTORY]);
 }
 
 /**
- * adw_combo_row_get_list_factory: (attributes org.gtk.Method.get_property=list-factory)
+ * adw_combo_row_get_list_factory:
  * @self: a combo row
  *
  * Gets the factory for populating list items in the popup.
  *
  * Returns: (nullable) (transfer none): the factory in use
- *
- * Since: 1.0
  */
 GtkListItemFactory *
 adw_combo_row_get_list_factory (AdwComboRow *self)
@@ -826,15 +1031,13 @@ adw_combo_row_get_list_factory (AdwComboRow *self)
 }
 
 /**
- * adw_combo_row_set_list_factory: (attributes org.gtk.Method.set_property=list-factory)
+ * adw_combo_row_set_list_factory:
  * @self: a combo row
  * @factory: (nullable) (transfer none): the factory to use
  *
  * Sets the factory for populating list items in the popup.
  *
  * If this is not set, [property@ComboRow:factory] is used.
- *
- * Since: 1.0
  */
 void
 adw_combo_row_set_list_factory (AdwComboRow        *self,
@@ -859,14 +1062,12 @@ adw_combo_row_set_list_factory (AdwComboRow        *self,
 }
 
 /**
- * adw_combo_row_get_expression: (attributes org.gtk.Method.get_property=expression)
+ * adw_combo_row_get_expression:
  * @self: a combo row
  *
  * Gets the expression used to obtain strings from items.
  *
  * Returns: (nullable) (transfer none): the expression used to obtain strings from items
- *
- * Since: 1.0
  */
 GtkExpression *
 adw_combo_row_get_expression (AdwComboRow *self)
@@ -881,7 +1082,7 @@ adw_combo_row_get_expression (AdwComboRow *self)
 }
 
 /**
- * adw_combo_row_set_expression: (attributes org.gtk.Method.set_property=expression)
+ * adw_combo_row_set_expression:
  * @self: a combo row
  * @expression: (nullable): an expression
  *
@@ -892,8 +1093,6 @@ adw_combo_row_get_expression (AdwComboRow *self)
  * It's used to bind strings to labels produced by the default factory if
  * [property@ComboRow:factory] is not set, or when
  * [property@ComboRow:use-subtitle] is set to `TRUE`.
- *
- * Since: 1.0
  */
 void
 adw_combo_row_set_expression (AdwComboRow   *self,
@@ -918,18 +1117,21 @@ adw_combo_row_set_expression (AdwComboRow   *self,
 
   selection_changed (self);
 
+  update_filter (self);
+
+  if (priv->uses_default_factory)
+    set_default_factory (self);
+
   g_object_notify_by_pspec (G_OBJECT (self), props[PROP_EXPRESSION]);
 }
 
 /**
- * adw_combo_row_get_use_subtitle: (attributes org.gtk.Method.get_property=use-subtitle)
+ * adw_combo_row_get_use_subtitle:
  * @self: a combo row
  *
  * Gets whether to use the current value as the subtitle.
  *
  * Returns: whether to use the current value as the subtitle
- *
- * Since: 1.0
  */
 gboolean
 adw_combo_row_get_use_subtitle (AdwComboRow *self)
@@ -944,7 +1146,7 @@ adw_combo_row_get_use_subtitle (AdwComboRow *self)
 }
 
 /**
- * adw_combo_row_set_use_subtitle: (attributes org.gtk.Method.set_property=use-subtitle)
+ * adw_combo_row_set_use_subtitle:
  * @self: a combo row
  * @use_subtitle: whether to use the current value as the subtitle
  *
@@ -957,8 +1159,6 @@ adw_combo_row_get_use_subtitle (AdwComboRow *self)
  *
  * The subtitle is interpreted as Pango markup if
  * [property@PreferencesRow:use-markup] is set to `TRUE`.
- *
- * Since: 1.0
  */
 void
 adw_combo_row_set_use_subtitle (AdwComboRow *self,
@@ -981,4 +1181,119 @@ adw_combo_row_set_use_subtitle (AdwComboRow *self,
     adw_action_row_set_subtitle (ADW_ACTION_ROW (self), NULL);
 
   g_object_notify_by_pspec (G_OBJECT (self), props[PROP_USE_SUBTITLE]);
+}
+
+/**
+ * adw_combo_row_get_enable_search:
+ * @self: a combo row
+ *
+ * Gets whether search is enabled.
+ * 
+ * If set to `TRUE`, a search entry will be shown in the popup that
+ * allows to search for items in the list.
+ * 
+ * Search requires [property@ComboRow:expression] to be set.
+ *
+ * Returns: whether the popup includes a search entry
+ * 
+ * Since: 1.4
+ */
+gboolean
+adw_combo_row_get_enable_search (AdwComboRow *self)
+{
+  AdwComboRowPrivate *priv;
+
+  g_return_val_if_fail (ADW_IS_COMBO_ROW (self), FALSE);
+
+  priv = adw_combo_row_get_instance_private (self);
+
+  return priv->enable_search;
+}
+
+/**
+ * adw_combo_row_set_enable_search:
+ * @self: a combo row
+ * @enable_search: whether to enable search
+ *
+ * Sets whether to enable search.
+ * 
+ * If set to `TRUE`, a search entry will be shown in the popup that
+ * allows to search for items in the list.
+ * 
+ * Search requires [property@ComboRow:expression] to be set.
+ * 
+ * Since: 1.4
+ */
+void
+adw_combo_row_set_enable_search (AdwComboRow *self,
+                                 gboolean     enable_search)
+{
+  AdwComboRowPrivate *priv;
+
+  g_return_if_fail (ADW_IS_COMBO_ROW (self));
+
+  priv = adw_combo_row_get_instance_private (self);
+
+  enable_search = !!enable_search;
+
+  if (priv->enable_search == enable_search)
+    return;
+
+  priv->enable_search = enable_search;
+  
+  gtk_editable_set_text (GTK_EDITABLE (priv->search_entry), "");
+  gtk_widget_set_visible (GTK_WIDGET (priv->search_entry), enable_search);
+
+  g_object_notify_by_pspec (G_OBJECT (self), props[PROP_ENABLE_SEARCH]);
+}
+
+/**
+ * adw_combo_row_get_search_match_mode:
+ * @self: a combo row
+ *
+ * Returns the match mode that the search filter is using.
+ *
+ * Returns: the match mode of the search filter
+ *
+ * Since: 1.6
+ */
+GtkStringFilterMatchMode
+adw_combo_row_get_search_match_mode (AdwComboRow *self)
+{
+  AdwComboRowPrivate *priv;
+
+  g_return_val_if_fail (ADW_IS_COMBO_ROW (self), GTK_STRING_FILTER_MATCH_MODE_PREFIX);
+
+  priv = adw_combo_row_get_instance_private (self);
+
+  return priv->search_match_mode;
+}
+
+/**
+ * adw_combo_row_set_search_match_mode:
+ * @self: a combo row
+ * @search_match_mode: the new match mode
+ *
+ * Sets the match mode for the search filter.
+ *
+ * Since: 1.6
+ */
+void
+adw_combo_row_set_search_match_mode (AdwComboRow *self,
+                                     GtkStringFilterMatchMode search_match_mode)
+{
+  AdwComboRowPrivate *priv;
+
+  g_return_if_fail (ADW_IS_COMBO_ROW (self));
+
+  priv = adw_combo_row_get_instance_private (self);
+
+  if (priv->search_match_mode == search_match_mode)
+    return;
+
+  priv->search_match_mode = search_match_mode;
+
+  update_filter (self);
+
+  g_object_notify_by_pspec (G_OBJECT (self), props[PROP_SEARCH_MATCH_MODE]);
 }

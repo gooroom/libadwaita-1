@@ -1,17 +1,21 @@
-diff --git a/src/adw-style-manager.c b/src/adw-style-manager.c
-index 1c896c0..277501c 100644
+Description: Allow using GTK themes other than Adwaita
+ This patch allows libadwaita to respect the GTK theme setting from
+ org.gnome.desktop.interface instead of forcing Adwaita-empty theme.
+ This is needed for Gooroom to use custom GTK themes.
+Author: Gooroom Team <gooroom@gooroom.kr>
+Forwarded: not-needed
+
 --- a/src/adw-style-manager.c
 +++ b/src/adw-style-manager.c
-@@ -233,6 +233,21 @@ notify_high_contrast_cb (AdwStyleManager *self)
-   g_object_notify_by_pspec (G_OBJECT (self), props[PROP_HIGH_CONTRAST]);
+@@ -432,6 +432,22 @@
  }
  
-+static void
+ static void
 +adw_style_manager_theme_changed (GSettings *settings, const char *key, GdkDisplay *display)
 +{
 +  char *theme = g_settings_get_string(settings, "gtk-theme");
 +  if (!theme) {
-+    theme = "Adwaita-empty";
++    theme = g_strdup ("Adwaita-empty");
 +  }
 +  gboolean is_dark_variant = NULL != strstr(theme, "-dark");
 +
@@ -19,16 +23,18 @@ index 1c896c0..277501c 100644
 +                "gtk-theme-name", theme,
 +                "gtk-application-prefer-dark-theme", is_dark_variant,
 +                NULL);
++  g_free (theme);
 +}
 +
- static void
++static void
  adw_style_manager_constructed (GObject *object)
  {
-@@ -258,19 +273,29 @@ adw_style_manager_constructed (GObject *object)
+   AdwStyleManager *self = ADW_STYLE_MANAGER (object);
+@@ -457,29 +473,18 @@
                               G_CONNECT_SWAPPED);
  
-     if (!g_getenv ("GTK_THEME")) {
--      g_object_set (gtk_settings_get_for_display (self->display),
+     if (!adw_is_granite_present () && !g_getenv ("GTK_THEME")) {
+-      g_object_set (self->gtk_settings,
 -                    "gtk-theme-name", "Adwaita-empty",
 -                    NULL);
 -
@@ -41,29 +47,28 @@ index 1c896c0..277501c 100644
 -      gtk_style_context_add_provider_for_display (self->display,
 -                                                  GTK_STYLE_PROVIDER (self->colors_provider),
 -                                                  GTK_STYLE_PROVIDER_PRIORITY_THEME);
-+//    g_object_set (gtk_settings_get_for_display (self->display),
-+//                  "gtk-theme-name", "Adwaita-empty",
-+//                  NULL);
-+//
-+//    self->provider = gtk_css_provider_new ();
-+//    gtk_style_context_add_provider_for_display (self->display,
-+//                                                GTK_STYLE_PROVIDER (self->provider),
-+//                                                GTK_STYLE_PROVIDER_PRIORITY_THEME);
-+//
-+//    self->colors_provider = gtk_css_provider_new ();
-+//    gtk_style_context_add_provider_for_display (self->display,
-+//                                                GTK_STYLE_PROVIDER (self->colors_provider),
-+//                                                GTK_STYLE_PROVIDER_PRIORITY_THEME);
-+
-+        GSettingsSchemaSource *schema_source = g_settings_schema_source_get_default ();
-+        GSettingsSchema *schema = g_settings_schema_source_lookup (schema_source,
-+                                                                   "org.gnome.desktop.interface",
-+                                                                   TRUE);
+-
+-      self->accent_provider = gtk_css_provider_new ();
+-      gtk_style_context_add_provider_for_display (self->display,
+-                                                  GTK_STYLE_PROVIDER (self->accent_provider),
+-                                                  GTK_STYLE_PROVIDER_PRIORITY_THEME);
+-
+-      self->fonts_provider = gtk_css_provider_new ();
+-      gtk_style_context_add_provider_for_display (self->display,
+-                                                  GTK_STYLE_PROVIDER (self->fonts_provider),
+-                                                  GTK_STYLE_PROVIDER_PRIORITY_THEME);
++      /* Gooroom: Use GTK theme from GSettings instead of forcing Adwaita-empty */
++      GSettingsSchemaSource *schema_source = g_settings_schema_source_get_default ();
++      GSettingsSchema *schema = g_settings_schema_source_lookup (schema_source,
++                                                                 "org.gnome.desktop.interface",
++                                                                 TRUE);
++      if (schema) {
 +        GSettings *interface_settings = g_settings_new_full (schema, NULL, NULL);
-+
 +        adw_style_manager_theme_changed (interface_settings, "gtk-theme", self->display);
-+        g_signal_connect (interface_settings, "changed",
++        g_signal_connect (interface_settings, "changed::gtk-theme",
 +                          G_CALLBACK (adw_style_manager_theme_changed), self->display);
++        g_settings_schema_unref (schema);
++      }
      }
  
      self->animations_provider = gtk_css_provider_new ();

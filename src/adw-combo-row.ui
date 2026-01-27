@@ -22,6 +22,7 @@
         <child>
           <object class="GtkImage">
             <property name="icon_name">pan-down-symbolic</property>
+            <property name="accessible-role">presentation</property>
             <style>
               <class name="dropdown-arrow"/>
             </style>
@@ -34,17 +35,36 @@
               <class name="menu"/>
             </style>
             <property name="child">
-              <object class="GtkScrolledWindow">
-                <property name="hscrollbar_policy">never</property>
-                <property name="max_content_height">400</property>
-                <property name="propagate_natural_width">True</property>
-                <property name="propagate_natural_height">True</property>
-                <property name="child">
-                  <object class="GtkListView" id="list">
-                    <property name="single-click-activate">True</property>
-                    <signal name="activate" handler="row_activated_cb" swapped="true"/>
+              <object class="GtkBox">
+                <property name="orientation">vertical</property>
+                <child>
+                  <object class="GtkSearchEntry" id="search_entry">
+                    <style>
+                      <class name="combo-searchbar"/>
+                    </style>
+                    <signal name="search-changed" handler="search_changed_cb"/>
+                    <signal name="stop-search" handler="search_stop_cb"/>
+                    <property name="visible">False</property>
+                    <property name="max-width-chars">6</property>
+                    <property name="width-chars">6</property>
+                    <property name="placeholder-text" translatable="yes" comments="Translators: This is a placeholder text of the search entry from AdwComboRow. It should be phrased as a verb.">Search</property>
                   </object>
-                </property>
+                </child>
+                <child>
+                  <object class="GtkScrolledWindow">
+                    <property name="hscrollbar_policy">never</property>
+                    <property name="max_content_height">400</property>
+                    <property name="propagate_natural_width">True</property>
+                    <property name="propagate_natural_height">True</property>
+                    <property name="child">
+                      <object class="GtkListView" id="list">
+                        <property name="single-click-activate">True</property>
+                        <property name="tab-behavior">item</property>
+                        <signal name="activate" handler="row_activated_cb" swapped="true"/>
+                      </object>
+                    </property>
+                  </object>
+                </child>
               </object>
             </property>
           </object>

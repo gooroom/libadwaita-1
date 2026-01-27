@@ -2,7 +2,6 @@
 <interface>
   <requires lib="gtk" version="4.0"/>
   <requires lib="libadwaita" version="1.0"/>
-  <menu id="demo_menu"/>
   <object class="GtkBox" id="widget">
     <style>
       <class name="toolbar"/>
@@ -13,7 +12,7 @@
       </object>
     </child>
     <child>
-      <object class="GtkColorButton">
+      <object class="GtkColorDialogButton">
         <property name="rgba">#9141ac</property>
       </object>
     </child>

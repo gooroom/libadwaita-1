@@ -1,24 +1,18 @@
 #include "adw-demo-page-styles.h"
 
-#include <glib/gi18n.h>
-
-#include "adw-style-demo-window.h"
+#include "adw-style-demo-dialog.h"
 
 struct _AdwDemoPageStyles
 {
   AdwBin parent_instance;
 };
 
-G_DEFINE_TYPE (AdwDemoPageStyles, adw_demo_page_styles, ADW_TYPE_BIN)
+G_DEFINE_FINAL_TYPE (AdwDemoPageStyles, adw_demo_page_styles, ADW_TYPE_BIN)
 
 static void
 demo_run_cb (AdwDemoPageStyles *self)
 {
-  AdwStyleDemoWindow *window = adw_style_demo_window_new ();
-  GtkRoot *root = gtk_widget_get_root (GTK_WIDGET (self));
-
-  gtk_window_set_transient_for (GTK_WINDOW (window), GTK_WINDOW (root));
-  gtk_window_present (GTK_WINDOW (window));
+  adw_dialog_present (adw_style_demo_dialog_new (), GTK_WIDGET (self));
 }
 
 static void

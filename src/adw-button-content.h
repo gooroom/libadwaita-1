@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
  *
- * Author: Alexander Mikhaylenko <alexander.mikhaylenko@puri.sm>
+ * Author: Alice Mikhaylenko <alice.mikhaylenko@puri.sm>
  */
 
 #pragma once
@@ -43,5 +43,11 @@ gboolean adw_button_content_get_use_underline (AdwButtonContent *self);
 ADW_AVAILABLE_IN_ALL
 void     adw_button_content_set_use_underline (AdwButtonContent *self,
                                                gboolean          use_underline);
+
+ADW_AVAILABLE_IN_1_4
+gboolean adw_button_content_get_can_shrink (AdwButtonContent *self);
+ADW_AVAILABLE_IN_1_4
+void     adw_button_content_set_can_shrink (AdwButtonContent *self,
+                                            gboolean          can_shrink);
 
 G_END_DECLS

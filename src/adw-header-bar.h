@@ -72,6 +72,12 @@ ADW_AVAILABLE_IN_ALL
 void     adw_header_bar_set_show_end_title_buttons (AdwHeaderBar *self,
                                                     gboolean      setting);
 
+ADW_AVAILABLE_IN_1_4
+gboolean adw_header_bar_get_show_back_button (AdwHeaderBar *self);
+ADW_AVAILABLE_IN_1_4
+void     adw_header_bar_set_show_back_button (AdwHeaderBar *self,
+                                              gboolean      show_back_button);
+
 ADW_AVAILABLE_IN_ALL
 const char *adw_header_bar_get_decoration_layout (AdwHeaderBar *self);
 ADW_AVAILABLE_IN_ALL
@@ -83,5 +89,11 @@ AdwCenteringPolicy adw_header_bar_get_centering_policy (AdwHeaderBar       *self
 ADW_AVAILABLE_IN_ALL
 void               adw_header_bar_set_centering_policy (AdwHeaderBar       *self,
                                                         AdwCenteringPolicy  centering_policy);
+
+ADW_AVAILABLE_IN_1_4
+gboolean adw_header_bar_get_show_title (AdwHeaderBar *self);
+ADW_AVAILABLE_IN_1_4
+void     adw_header_bar_set_show_title (AdwHeaderBar *self,
+                                        gboolean      show_title);
 
 G_END_DECLS

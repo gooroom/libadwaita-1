@@ -3,14 +3,17 @@
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
  *
- * Author: Alexander Mikhaylenko <alexander.mikhaylenko@puri.sm>
+ * Author: Alice Mikhaylenko <alice.mikhaylenko@puri.sm>
  */
 
 #include "config.h"
 #include "adw-message-dialog.h"
 
+#include "adw-bin.h"
+#include "adw-gizmo-private.h"
 #include "adw-gtkbuilder-utils-private.h"
-#include "adw-squeezer.h"
+#include "adw-marshalers.h"
+#include "adw-widget-utils-private.h"
 
 /**
  * AdwMessageDialog:
@@ -67,11 +70,52 @@
  * gtk_window_present (GTK_WINDOW (dialog));
  * ```
  *
+ * ## Async API
+ *
+ * `AdwMessageDialog` can also be used via the [method@MessageDialog.choose]
+ * method. This API follows the GIO async pattern, for example:
+ *
+ * ```c
+ * static void
+ * dialog_cb (AdwMessageDialog *dialog,
+ *            GAsyncResult     *result,
+ *            MyWindow         *self)
+ * {
+ *   const char *response = adw_message_dialog_choose_finish (dialog, result);
+ *
+ *   // ...
+ * }
+ *
+ * static void
+ * show_dialog (MyWindow *self)
+ * {
+ *   GtkWidget *dialog;
+ *
+ *   dialog = adw_message_dialog_new (GTK_WINDOW (self), _("Replace File?"), NULL);
+ *
+ *   adw_message_dialog_format_body (ADW_MESSAGE_DIALOG (dialog),
+ *                                   _("A file named “%s” already exists. Do you want to replace it?"),
+ *                                   filename);
+ *
+ *   adw_message_dialog_add_responses (ADW_MESSAGE_DIALOG (dialog),
+ *                                     "cancel",  _("_Cancel"),
+ *                                     "replace", _("_Replace"),
+ *                                     NULL);
+ *
+ *   adw_message_dialog_set_response_appearance (ADW_MESSAGE_DIALOG (dialog), "replace", ADW_RESPONSE_DESTRUCTIVE);
+ *
+ *   adw_message_dialog_set_default_response (ADW_MESSAGE_DIALOG (dialog), "cancel");
+ *   adw_message_dialog_set_close_response (ADW_MESSAGE_DIALOG (dialog), "cancel");
+ *
+ *   adw_message_dialog_choose (ADW_MESSAGE_DIALOG (dialog), NULL, (GAsyncReadyCallback) dialog_cb, self);
+ * }
+ * ```
+ *
  * ## AdwMessageDialog as GtkBuildable
  *
  * `AdwMessageDialog` supports adding responses in UI definitions by via the
  * `<responses>` element that may contain multiple `<response>` elements, each
- * respresenting a response.
+ * representing a response.
  *
  * Each of the `<response>` elements must have the `id` attribute specifying the
  * response ID. The contents of the element are used as the response label.
@@ -105,27 +149,18 @@
  * `AdwMessageDialog` uses the `GTK_ACCESSIBLE_ROLE_DIALOG` role.
  *
  * Since: 1.2
+ * Deprecated: 1.6: Use [class@AlertDialog].
  */
 
-/**
- * AdwResponseAppearance:
- * @ADW_RESPONSE_DEFAULT: the default appearance.
- * @ADW_RESPONSE_SUGGESTED: used to denote important responses such as the
- *     affirmative action.
- * @ADW_RESPONSE_DESTRUCTIVE: used to draw attention to the potentially damaging
- *     consequences of using the response. This appearance acts as a warning to
- *     the user.
- *
- * Describes the possible styles of [class@MessageDialog] response buttons.
- *
- * See [method@MessageDialog.set_response_appearance].
- *
- * Since: 1.2
- */
-
-#define DIALOG_MARGIN 30
-#define DIALOG_MAX_WIDTH 550
+#define DIALOG_MARGIN_VERT 20
+#define DIALOG_MARGIN_HORZ 30
+#define DIALOG_MAX_WIDTH 372 /* sp, not px */
+#define DIALOG_MAX_WIDE_WIDTH 600 /* sp, not px */
+#define DIALOG_PREFERRED_WIDTH 300 /* sp, not px */
 #define DIALOG_MIN_WIDTH 300
+#define BUTTON_SPACING 12
+#define RESPONSE_HORZ_PADDING 48
+#define RESPONSE_HORZ_PADDING_SHORT 36
 
 typedef struct {
   AdwMessageDialog *dialog;
@@ -134,20 +169,18 @@ typedef struct {
   AdwResponseAppearance appearance;
   gboolean enabled;
 
-  GtkWidget *wide_button;
-  GtkWidget *narrow_button;
+  GtkWidget *button;
 } ResponseInfo;
 
 typedef struct
 {
+  GtkWidget *heading_bin;
   GtkWidget *heading_label;
+  GtkWidget *heading_label_small;
   GtkWidget *body_label;
+  GtkWidget *child_bin;
   GtkBox *message_area;
-  GtkBox *wide_response_box;
-  GtkBox *narrow_response_box;
-  GtkSizeGroup *wide_size_group;
-  GtkSizeGroup *narrow_size_group;
-  AdwSqueezer *squeezer;
+  GtkWidget *response_area;
 
   char *heading;
   gboolean heading_use_markup;
@@ -165,6 +198,8 @@ typedef struct
   GtkWindow *parent_window;
   int parent_width;
   int parent_height;
+
+  guint parent_state_idle_id;
 } AdwMessageDialogPrivate;
 
 static void adw_message_dialog_buildable_init (GtkBuildableIface *iface);
@@ -215,15 +250,47 @@ static void
 parent_size_cb (AdwMessageDialog *self)
 {
   AdwMessageDialogPrivate *priv = adw_message_dialog_get_instance_private (self);
-  int w = gtk_widget_get_allocated_width (GTK_WIDGET (priv->parent_window));
-  int h = gtk_widget_get_allocated_height (GTK_WIDGET (priv->parent_window));
+  int w = gtk_widget_get_width (GTK_WIDGET (priv->parent_window));
+  int h = gtk_widget_get_height (GTK_WIDGET (priv->parent_window));
 
   if (w == priv->parent_width && h == priv->parent_height)
       return;
 
   priv->parent_width = w;
   priv->parent_height = h;
+
+  if (priv->parent_width < 450)
+    gtk_widget_add_css_class (GTK_WIDGET (self), "narrow");
+  else
+    gtk_widget_remove_css_class (GTK_WIDGET (self), "narrow");
+
+  if (priv->parent_height < 360)
+    gtk_widget_add_css_class (GTK_WIDGET (self), "short");
+  else
+    gtk_widget_remove_css_class (GTK_WIDGET (self), "short");
+
   gtk_widget_queue_resize (GTK_WIDGET (self));
+}
+
+static void
+parent_state_idle_cb (AdwMessageDialog *self)
+{
+  AdwMessageDialogPrivate *priv = adw_message_dialog_get_instance_private (self);
+
+  parent_size_cb (self);
+
+  priv->parent_state_idle_id = 0;
+}
+
+static void
+parent_state_cb (AdwMessageDialog *self)
+{
+  AdwMessageDialogPrivate *priv = adw_message_dialog_get_instance_private (self);
+
+  g_clear_handle_id (&priv->parent_state_idle_id, g_source_remove);
+
+  priv->parent_state_idle_id =
+    g_idle_add_once ((GSourceOnceFunc) parent_state_idle_cb, self);
 }
 
 static void
@@ -242,6 +309,8 @@ parent_realize_cb (AdwMessageDialog *self)
                             G_CALLBACK (parent_size_cb), self);
   g_signal_connect_swapped (surface, "notify::height",
                             G_CALLBACK (parent_size_cb), self);
+  g_signal_connect_swapped (surface, "notify::state",
+                            G_CALLBACK (parent_state_cb), self);
 
   parent_size_cb (self);
 }
@@ -259,9 +328,15 @@ parent_unrealize_cb (AdwMessageDialog *self)
   g_signal_handlers_disconnect_by_func (surface,
                                         G_CALLBACK (parent_size_cb),
                                         self);
+  g_signal_handlers_disconnect_by_func (surface,
+                                        G_CALLBACK (parent_state_cb),
+                                        self);
 
   priv->parent_width = -1;
   priv->parent_height = -1;
+
+  gtk_widget_remove_css_class (GTK_WIDGET (self), "short");
+  gtk_widget_remove_css_class (GTK_WIDGET (self), "narrow");
 }
 
 static void
@@ -269,9 +344,14 @@ parent_window_notify_cb (AdwMessageDialog *self)
 {
   AdwMessageDialogPrivate *priv = adw_message_dialog_get_instance_private (self);
 
+  g_clear_handle_id (&priv->parent_state_idle_id, g_source_remove);
+
   priv->parent_window = NULL;
   priv->parent_width = -1;
   priv->parent_height = -1;
+
+  gtk_widget_remove_css_class (GTK_WIDGET (self), "short");
+  gtk_widget_remove_css_class (GTK_WIDGET (self), "narrow");
 }
 
 static void
@@ -284,6 +364,8 @@ set_parent (AdwMessageDialog *self,
     return;
 
   if (priv->parent_window) {
+    g_clear_handle_id (&priv->parent_state_idle_id, g_source_remove);
+
     g_signal_handlers_disconnect_by_func (priv->parent_window,
                                           G_CALLBACK (parent_realize_cb),
                                           self);
@@ -324,20 +406,27 @@ parent_changed_cb (AdwMessageDialog *self)
   set_parent (self, transient_for);
 }
 
-static void
-button_clicked_cb (ResponseInfo *info)
+
+static inline void
+emit_response (AdwMessageDialog *self, GQuark response)
 {
-  AdwMessageDialog *self = info->dialog;
   AdwMessageDialogPrivate *priv = adw_message_dialog_get_instance_private (self);
 
   g_object_ref (self);
   priv->block_close_response = TRUE;
 
   gtk_window_close (GTK_WINDOW (self));
-  g_signal_emit (self, signals[SIGNAL_RESPONSE], info->id, g_quark_to_string (info->id));
+  g_signal_emit (self, signals[SIGNAL_RESPONSE], response, g_quark_to_string (response));
 
   priv->block_close_response = FALSE;
   g_object_unref (self);
+}
+
+
+static void
+button_clicked_cb (ResponseInfo *info)
+{
+  emit_response (info->dialog, info->id);
 }
 
 static GtkWidget *
@@ -346,14 +435,14 @@ create_response_button (AdwMessageDialog *self,
 {
   GtkWidget *button = gtk_button_new_with_mnemonic (info->label);
 
-  gtk_widget_add_css_class (button, "flat");
+  gtk_button_set_can_shrink (GTK_BUTTON (button), TRUE);
 
   switch (info->appearance) {
   case ADW_RESPONSE_SUGGESTED:
-    gtk_widget_add_css_class (button, "suggested");
+    gtk_widget_add_css_class (button, "suggested-action");
     break;
   case ADW_RESPONSE_DESTRUCTIVE:
-    gtk_widget_add_css_class (button, "destructive");
+    gtk_widget_add_css_class (button, "destructive-action");
     break;
   case ADW_RESPONSE_DEFAULT:
   default:
@@ -365,26 +454,6 @@ create_response_button (AdwMessageDialog *self,
   g_signal_connect_swapped (button, "clicked", G_CALLBACK (button_clicked_cb), info);
 
   return button;
-}
-
-static void
-update_default_response (AdwMessageDialog *self)
-{
-  AdwMessageDialogPrivate *priv = adw_message_dialog_get_instance_private (self);
-  ResponseInfo *info;
-
-  if (!priv->default_response)
-    return;
-
-  info = find_response (self, g_quark_to_string (priv->default_response));
-
-  if (!info)
-    return;
-
-  if (adw_squeezer_get_visible_child (priv->squeezer) == GTK_WIDGET (priv->narrow_response_box))
-    gtk_window_set_default_widget (GTK_WINDOW (self), info->narrow_button);
-  else
-    gtk_window_set_default_widget (GTK_WINDOW (self), info->wide_button);
 }
 
 static void
@@ -439,8 +508,6 @@ adw_message_dialog_map (GtkWidget *widget)
 
   GTK_WIDGET_CLASS (adw_message_dialog_parent_class)->map (widget);
 
-  update_default_response (self);
-
   /* The rest of the function was copied from gtkdialog.c */
   focus = gtk_window_get_focus (GTK_WINDOW (self));
   if (!focus) {
@@ -468,19 +535,267 @@ adw_message_dialog_map (GtkWidget *widget)
     for (l = priv->responses; l; l = l->next) {
       ResponseInfo *response = l->data;
 
-      if ((focus == NULL || response->wide_button == focus) &&
-           response->wide_button != default_widget &&
+      if ((focus == NULL || response->button == focus) &&
+           response->button != default_widget &&
            default_widget) {
         gtk_widget_grab_focus (default_widget);
         break;
       }
+    }
+  }
+}
 
-      if ((focus == NULL || response->narrow_button == focus) &&
-           response->narrow_button != default_widget &&
-           default_widget) {
-        gtk_widget_grab_focus (default_widget);
-        break;
-      }
+static GtkSizeRequestMode
+get_heading_request_mode (GtkWidget *widget)
+{
+  return GTK_SIZE_REQUEST_HEIGHT_FOR_WIDTH;
+}
+
+static void
+measure_heading (GtkWidget      *widget,
+                 GtkOrientation  orientation,
+                 int             for_size,
+                 int            *minimum,
+                 int            *natural,
+                 int            *minimum_baseline,
+                 int            *natural_baseline)
+{
+  AdwMessageDialog *self = ADW_MESSAGE_DIALOG (gtk_widget_get_root (widget));
+  AdwMessageDialogPrivate *priv = adw_message_dialog_get_instance_private (self);
+  int large_min, large_nat, small_min, small_nat;
+
+  if (gtk_widget_has_css_class (GTK_WIDGET (self), "short")) {
+    gtk_widget_measure (priv->heading_label_small, orientation, for_size,
+                        minimum, natural, NULL, NULL);
+
+    if (minimum_baseline)
+      *minimum_baseline = -1;
+    if (natural_baseline)
+      *natural_baseline = -1;
+
+    return;
+  }
+
+  gtk_widget_measure (priv->heading_label, orientation, for_size,
+                      &large_min, &large_nat, NULL, NULL);
+  gtk_widget_measure (priv->heading_label_small, orientation, for_size,
+                      &small_min, &small_nat, NULL, NULL);
+
+  if (orientation == GTK_ORIENTATION_HORIZONTAL) {
+    if (minimum)
+      *minimum = MIN (large_min, small_min);
+    if (natural)
+      *natural = MAX (large_nat, small_nat);
+  } else {
+    if (for_size < 0) {
+      if (minimum)
+        *minimum = MAX (large_min, small_min);
+      if (natural)
+        *natural = MAX (large_nat, small_nat);
+    } else {
+      int large_width;
+
+      gtk_widget_measure (priv->heading_label, GTK_ORIENTATION_HORIZONTAL, -1,
+                          NULL, &large_width, NULL, NULL);
+
+      if (minimum)
+        *minimum = (large_width > for_size) ? small_min : large_min;
+      if (natural)
+        *natural = (large_width > for_size) ? small_nat : large_nat;
+    }
+  }
+
+  if (minimum_baseline)
+    *minimum_baseline = -1;
+  if (natural_baseline)
+    *natural_baseline = -1;
+}
+
+static void
+allocate_heading (GtkWidget *widget,
+                  int        width,
+                  int        height,
+                  int        baseline)
+{
+  AdwMessageDialog *self = ADW_MESSAGE_DIALOG (gtk_widget_get_root (widget));
+  AdwMessageDialogPrivate *priv = adw_message_dialog_get_instance_private (self);
+  gboolean small_label;
+
+  if (gtk_widget_has_css_class (GTK_WIDGET (self), "short")) {
+    small_label = TRUE;
+  } else {
+    int large_nat;
+
+    gtk_widget_measure (priv->heading_label, GTK_ORIENTATION_HORIZONTAL, -1,
+                        NULL, &large_nat, NULL, NULL);
+
+    small_label = large_nat > width;
+  }
+
+  if (gtk_widget_get_child_visible (priv->heading_label) == small_label)
+    gtk_widget_set_child_visible (priv->heading_label, !small_label);
+
+  if (gtk_widget_get_child_visible (priv->heading_label_small) != small_label)
+    gtk_widget_set_child_visible (priv->heading_label_small, small_label);
+
+  if (small_label)
+    gtk_widget_allocate (priv->heading_label_small, width, height, baseline, NULL);
+  else
+    gtk_widget_allocate (priv->heading_label, width, height, baseline, NULL);
+}
+
+static void
+measure_responses_do (AdwMessageDialog *self,
+                      gboolean          compact,
+                      GtkOrientation    orientation,
+                      int              *minimum,
+                      int              *natural)
+{
+  AdwMessageDialogPrivate *priv = adw_message_dialog_get_instance_private (self);
+  GList *l;
+  int min = 0, nat = 0;
+  int button_min = 0, button_nat = 0;
+  int n_buttons = 0;
+  gboolean horiz = (orientation == GTK_ORIENTATION_HORIZONTAL);
+
+  for (l = priv->responses; l; l = l->next) {
+    ResponseInfo *response = l->data;
+    int child_min, child_nat;
+
+    gtk_widget_measure (response->button, orientation, -1,
+                        &child_min, &child_nat, NULL, NULL);
+
+    if (horiz == compact) {
+      min = MAX (min, child_min);
+      nat = MAX (nat, child_nat);
+    } else if (horiz) {
+      button_min = MAX (button_min, child_min);
+      button_nat = MAX (button_nat, child_nat);
+      n_buttons++;
+    } else {
+      min += child_min;
+      nat += child_nat;
+    }
+
+    if (horiz != compact && l->next) {
+      min += BUTTON_SPACING;
+      nat += BUTTON_SPACING;
+    }
+  }
+
+  if (horiz && !compact) {
+    min += button_min * n_buttons;
+    nat += button_nat * n_buttons;
+  }
+
+  if (minimum)
+    *minimum = min;
+  if (natural)
+    *natural = nat;
+}
+
+static GtkSizeRequestMode
+get_responses_request_mode (GtkWidget *widget)
+{
+  return GTK_SIZE_REQUEST_HEIGHT_FOR_WIDTH;
+}
+
+static void
+measure_responses (GtkWidget      *widget,
+                   GtkOrientation  orientation,
+                   int             for_size,
+                   int            *minimum,
+                   int            *natural,
+                   int            *minimum_baseline,
+                   int            *natural_baseline)
+{
+  AdwMessageDialog *self = ADW_MESSAGE_DIALOG (gtk_widget_get_root (widget));
+
+  if (orientation == GTK_ORIENTATION_HORIZONTAL) {
+    measure_responses_do (self, TRUE, orientation, minimum, NULL);
+    measure_responses_do (self, FALSE, orientation, NULL, natural);
+  } else {
+    int wide_nat = 0;
+    gboolean use_compact_layout;
+
+    if (for_size >= 0)
+      measure_responses_do (self, FALSE, GTK_ORIENTATION_HORIZONTAL, NULL, &wide_nat);
+
+    use_compact_layout = for_size >= 0 && wide_nat > for_size &&
+                         !gtk_widget_has_css_class (GTK_WIDGET (self), "short");
+    measure_responses_do (self, use_compact_layout,
+                          orientation, minimum, natural);
+  }
+
+  if (minimum_baseline)
+    *minimum_baseline = -1;
+  if (natural_baseline)
+    *natural_baseline = -1;
+}
+
+static void
+allocate_responses (GtkWidget *widget,
+                    int        width,
+                    int        height,
+                    int        baseline)
+{
+  AdwMessageDialog *self = ADW_MESSAGE_DIALOG (gtk_widget_get_root (widget));
+  AdwMessageDialogPrivate *priv = adw_message_dialog_get_instance_private (self);
+  gboolean compact;
+  int wide_nat;
+
+  measure_responses_do (self, FALSE, GTK_ORIENTATION_HORIZONTAL, NULL, &wide_nat);
+
+  compact = wide_nat > width && !gtk_widget_has_css_class (GTK_WIDGET (self), "short");
+
+  if (compact)
+    gtk_widget_add_css_class (widget, "compact");
+  else
+    gtk_widget_remove_css_class (widget, "compact");
+
+  if (compact) {
+    int pos = height;
+    GList *l;
+
+    for (l = priv->responses; l; l = l->next) {
+      ResponseInfo *response = l->data;
+      int child_height;
+
+      gtk_widget_measure (response->button, GTK_ORIENTATION_VERTICAL, -1,
+                          &child_height, NULL, NULL, NULL);
+
+      pos -= child_height;
+
+      gtk_widget_allocate (response->button, width, child_height, -1,
+                           gsk_transform_translate (NULL, &GRAPHENE_POINT_INIT (0, pos)));
+
+      pos -= BUTTON_SPACING;
+    }
+  } else {
+    gboolean is_rtl = gtk_widget_get_direction (widget) == GTK_TEXT_DIR_RTL;
+    int pos = is_rtl ? width : 0;
+    int n_buttons = g_list_length (priv->responses);
+    int total_width = width - BUTTON_SPACING * MAX (0, (n_buttons - 1));
+    int button_width = (int) ceil ((double) total_width / n_buttons);
+    GList *l;
+
+    for (l = priv->responses; l; l = l->next) {
+      ResponseInfo *response = l->data;
+
+      button_width = MIN (button_width, total_width);
+
+      total_width -= button_width;
+
+      if (is_rtl)
+        pos -= button_width;
+
+      gtk_widget_allocate (response->button, button_width, height, -1,
+                           gsk_transform_translate (NULL, &GRAPHENE_POINT_INIT (pos, 0)));
+
+      if (!is_rtl)
+        pos += button_width + BUTTON_SPACING;
+      else
+        pos -= BUTTON_SPACING;
     }
   }
 }
@@ -506,30 +821,55 @@ adw_message_dialog_measure (GtkWidget      *widget,
                                                                NULL, NULL);
 
   if (orientation == GTK_ORIENTATION_HORIZONTAL) {
-    int wide_min, narrow_nat;
+    gboolean is_short = gtk_widget_has_css_class (GTK_WIDGET (self), "short");
+    int wide_nat, narrow_nat, heading_nat;
+    int max_width = adw_length_unit_to_px (ADW_LENGTH_UNIT_SP,
+                                           DIALOG_MAX_WIDTH,
+                                           gtk_widget_get_settings (widget));
+    int pref_width = adw_length_unit_to_px (ADW_LENGTH_UNIT_SP,
+                                            DIALOG_PREFERRED_WIDTH,
+                                            gtk_widget_get_settings (widget));
 
     min_size = MAX (min_size, DIALOG_MIN_WIDTH);
 
     if (priv->parent_window) {
-      max_size = priv->parent_width - DIALOG_MARGIN * 2;
-      max_size = MIN (max_size, DIALOG_MAX_WIDTH);
+      max_size = priv->parent_width - DIALOG_MARGIN_HORZ * 2;
+      max_size = MIN (max_size, max_width);
     } else {
-      max_size = DIALOG_MAX_WIDTH;
+      max_size = max_width;
     }
 
-    gtk_widget_measure (GTK_WIDGET (priv->wide_response_box),
-                        GTK_ORIENTATION_HORIZONTAL, -1,
-                        &wide_min, NULL, NULL, NULL);
-    gtk_widget_measure (GTK_WIDGET (priv->narrow_response_box),
-                        GTK_ORIENTATION_HORIZONTAL, -1,
-                        NULL, &narrow_nat, NULL, NULL);
+    if (gtk_widget_get_visible (priv->heading_bin)) {
+      gtk_widget_measure (priv->heading_bin, orientation, -1,
+                          NULL, &heading_nat, NULL, NULL);
+    } else {
+      heading_nat = 0;
+    }
 
-    narrow_nat = MAX (narrow_nat, DIALOG_MIN_WIDTH);
+    measure_responses_do (self, FALSE, GTK_ORIENTATION_HORIZONTAL, NULL, &wide_nat);
+    measure_responses_do (self, TRUE, GTK_ORIENTATION_HORIZONTAL, NULL, &narrow_nat);
 
-    if (max_size < wide_min)
+    if (is_short) {
+      wide_nat += RESPONSE_HORZ_PADDING_SHORT;
+      narrow_nat += RESPONSE_HORZ_PADDING_SHORT;
+    } else {
+      wide_nat += RESPONSE_HORZ_PADDING;
+      narrow_nat += RESPONSE_HORZ_PADDING;
+    }
+
+    narrow_nat = MAX (narrow_nat, pref_width);
+
+    if (is_short) {
+      max_size = adw_length_unit_to_px (ADW_LENGTH_UNIT_SP,
+                                        DIALOG_MAX_WIDE_WIDTH,
+                                        gtk_widget_get_settings (widget));
+
+      max_size = MIN (max_size, wide_nat);
+    } else if (wide_nat > min_size) {
       max_size = MIN (max_size, narrow_nat);
+    }
   } else {
-    max_size = priv->parent_height - DIALOG_MARGIN * 2;
+    max_size = priv->parent_height - DIALOG_MARGIN_VERT * 2;
   }
 
   max_size = MAX (min_size, max_size);
@@ -622,10 +962,7 @@ adw_message_dialog_dispose (GObject *object)
 
   set_parent (self, NULL);
 
-  if (priv->child) {
-    gtk_box_remove (priv->message_area, priv->child);
-    priv->child = NULL;
-  }
+  priv->child = NULL;
 
   if (priv->responses) {
     g_list_free_full (priv->responses, (GDestroyNotify) response_info_free);
@@ -667,11 +1004,12 @@ adw_message_dialog_class_init (AdwMessageDialogClass *klass)
   window_class->close_request = adw_message_dialog_close_request;
 
   /**
-   * AdwMessageDialog:heading: (attributes org.gtk.Property.get=adw_message_dialog_get_heading org.gtk.Property.set=adw_message_dialog_set_heading)
+   * AdwMessageDialog:heading:
    *
    * The heading of the dialog.
    *
    * Since: 1.2
+   * Deprecated: 1.6: Use [class@AlertDialog].
    */
   props[PROP_HEADING] =
     g_param_spec_string ("heading", NULL, NULL,
@@ -679,13 +1017,14 @@ adw_message_dialog_class_init (AdwMessageDialogClass *klass)
                          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
   /**
-   * AdwMessageDialog:heading-use-markup: (attributes org.gtk.Property.get=adw_message_dialog_get_heading_use_markup org.gtk.Property.set=adw_message_dialog_set_heading_use_markup)
+   * AdwMessageDialog:heading-use-markup:
    *
    * Whether the heading includes Pango markup.
    *
    * See [func@Pango.parse_markup].
    *
    * Since: 1.2
+   * Deprecated: 1.6: Use [class@AlertDialog].
    */
   props[PROP_HEADING_USE_MARKUP] =
     g_param_spec_boolean ("heading-use-markup", NULL, NULL,
@@ -693,11 +1032,12 @@ adw_message_dialog_class_init (AdwMessageDialogClass *klass)
                           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
   /**
-   * AdwMessageDialog:body: (attributes org.gtk.Property.get=adw_message_dialog_get_body org.gtk.Property.set=adw_message_dialog_set_body)
+   * AdwMessageDialog:body:
    *
    * The body text of the dialog.
    *
    * Since: 1.2
+   * Deprecated: 1.6: Use [class@AlertDialog].
    */
   props[PROP_BODY] =
     g_param_spec_string ("body", NULL, NULL,
@@ -705,13 +1045,14 @@ adw_message_dialog_class_init (AdwMessageDialogClass *klass)
                          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
   /**
-   * AdwMessageDialog:body-use-markup: (attributes org.gtk.Property.get=adw_message_dialog_get_body_use_markup org.gtk.Property.set=adw_message_dialog_set_body_use_markup)
+   * AdwMessageDialog:body-use-markup:
    *
    * Whether the body text includes Pango markup.
    *
    * See [func@Pango.parse_markup].
    *
    * Since: 1.2
+   * Deprecated: 1.6: Use [class@AlertDialog].
    */
   props[PROP_BODY_USE_MARKUP] =
     g_param_spec_boolean ("body-use-markup", NULL, NULL,
@@ -719,13 +1060,14 @@ adw_message_dialog_class_init (AdwMessageDialogClass *klass)
                           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
   /**
-   * AdwMessageDialog:extra-child: (attributes org.gtk.Property.get=adw_message_dialog_get_extra_child org.gtk.Property.set=adw_message_dialog_set_extra_child)
+   * AdwMessageDialog:extra-child:
    *
    * The child widget.
    *
    * Displayed below the heading and body.
    *
    * Since: 1.2
+   * Deprecated: 1.6: Use [class@AlertDialog].
    */
   props[PROP_EXTRA_CHILD] =
     g_param_spec_object ("extra-child", NULL, NULL,
@@ -733,7 +1075,7 @@ adw_message_dialog_class_init (AdwMessageDialogClass *klass)
                          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
   /**
-   * AdwMessageDialog:default-response: (attributes org.gtk.Property.get=adw_message_dialog_get_default_response org.gtk.Property.set=adw_message_dialog_set_default_response)
+   * AdwMessageDialog:default-response:
    *
    * The response ID of the default response.
    *
@@ -743,6 +1085,7 @@ adw_message_dialog_class_init (AdwMessageDialogClass *klass)
    * will do nothing.
    *
    * Since: 1.2
+   * Deprecated: 1.6: Use [class@AlertDialog].
    */
   props[PROP_DEFAULT_RESPONSE] =
     g_param_spec_string ("default-response", NULL, NULL,
@@ -750,7 +1093,7 @@ adw_message_dialog_class_init (AdwMessageDialogClass *klass)
                           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
   /**
-   * AdwMessageDialog:close-response: (attributes org.gtk.Property.get=adw_message_dialog_get_close_response org.gtk.Property.set=adw_message_dialog_set_close_response)
+   * AdwMessageDialog:close-response:
    *
    * The ID of the close response.
    *
@@ -762,6 +1105,7 @@ adw_message_dialog_class_init (AdwMessageDialogClass *klass)
    * The default close response is `close`.
    *
    * Since: 1.2
+   * Deprecated: 1.6: Use [class@AlertDialog].
    */
   props[PROP_CLOSE_RESPONSE] =
     g_param_spec_string ("close-response", NULL, NULL,
@@ -785,34 +1129,38 @@ adw_message_dialog_class_init (AdwMessageDialogClass *klass)
    * [property@MessageDialog:close-response].
    *
    * Since: 1.2
+   * Deprecated: 1.6: Use [class@AlertDialog].
    */
   signals[SIGNAL_RESPONSE] =
     g_signal_new ("response",
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_LAST | G_SIGNAL_DETAILED,
                   G_STRUCT_OFFSET (AdwMessageDialogClass, response),
-                  NULL, NULL, NULL,
+                  NULL, NULL,
+                  adw_marshal_VOID__STRING,
                   G_TYPE_NONE,
                   1,
                   G_TYPE_STRING);
+  g_signal_set_va_marshaller (signals[SIGNAL_RESPONSE],
+                              G_TYPE_FROM_CLASS (klass),
+                              adw_marshal_VOID__STRINGv);
 
   gtk_widget_class_set_template_from_resource (widget_class,
                                                "/org/gnome/Adwaita/ui/adw-message-dialog.ui");
 
+  gtk_widget_class_bind_template_child_private (widget_class, AdwMessageDialog, heading_bin);
   gtk_widget_class_bind_template_child_private (widget_class, AdwMessageDialog, heading_label);
+  gtk_widget_class_bind_template_child_private (widget_class, AdwMessageDialog, heading_label_small);
   gtk_widget_class_bind_template_child_private (widget_class, AdwMessageDialog, body_label);
+  gtk_widget_class_bind_template_child_private (widget_class, AdwMessageDialog, child_bin);
   gtk_widget_class_bind_template_child_private (widget_class, AdwMessageDialog, message_area);
-  gtk_widget_class_bind_template_child_private (widget_class, AdwMessageDialog, squeezer);
-  gtk_widget_class_bind_template_child_private (widget_class, AdwMessageDialog, wide_response_box);
-  gtk_widget_class_bind_template_child_private (widget_class, AdwMessageDialog, narrow_response_box);
-  gtk_widget_class_bind_template_child_private (widget_class, AdwMessageDialog, wide_size_group);
-  gtk_widget_class_bind_template_child_private (widget_class, AdwMessageDialog, narrow_size_group);
-
-  gtk_widget_class_bind_template_callback (widget_class, update_default_response);
+  gtk_widget_class_bind_template_child_private (widget_class, AdwMessageDialog, response_area);
 
   gtk_widget_class_add_binding_action (widget_class, GDK_KEY_Escape, 0, "window.close", NULL);
 
   gtk_widget_class_set_accessible_role (widget_class, GTK_ACCESSIBLE_ROLE_DIALOG);
+
+  g_type_ensure (ADW_TYPE_GIZMO);
 }
 
 static void
@@ -833,6 +1181,26 @@ adw_message_dialog_init (AdwMessageDialog *self)
   priv->id_to_response = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
 
   gtk_widget_init_template (GTK_WIDGET (self));
+
+  gtk_widget_set_layout_manager (priv->heading_bin,
+                                 gtk_custom_layout_new (get_heading_request_mode,
+                                                        measure_heading,
+                                                        allocate_heading));
+
+  gtk_widget_set_layout_manager (priv->response_area,
+                                 gtk_custom_layout_new (get_responses_request_mode,
+                                                        measure_responses,
+                                                        allocate_responses));
+
+  adw_gizmo_set_focus_func (ADW_GIZMO (priv->heading_bin),
+                            (AdwGizmoFocusFunc) adw_widget_focus_child);
+  adw_gizmo_set_grab_focus_func (ADW_GIZMO (priv->heading_bin),
+                            (AdwGizmoGrabFocusFunc) adw_widget_grab_focus_child);
+
+  adw_gizmo_set_focus_func (ADW_GIZMO (priv->response_area),
+                            (AdwGizmoFocusFunc) adw_widget_focus_child);
+  adw_gizmo_set_grab_focus_func (ADW_GIZMO (priv->response_area),
+                            (AdwGizmoGrabFocusFunc) adw_widget_grab_focus_child);
 
   parent_changed_cb (self);
   g_signal_connect (self, "notify::transient-for",
@@ -1092,6 +1460,7 @@ adw_message_dialog_buildable_init (GtkBuildableIface *iface)
  * Returns: the newly created `AdwMessageDialog`
  *
  * Since: 1.2
+ * Deprecated: 1.6: Use [class@AlertDialog].
  */
 GtkWidget *
 adw_message_dialog_new (GtkWindow  *parent,
@@ -1116,7 +1485,7 @@ adw_message_dialog_new (GtkWindow  *parent,
 }
 
 /**
- * adw_message_dialog_get_heading: (attributes org.gtk.Method.get_property=heading)
+ * adw_message_dialog_get_heading:
  * @self: a message dialog
  *
  * Gets the heading of @self.
@@ -1124,6 +1493,7 @@ adw_message_dialog_new (GtkWindow  *parent,
  * Returns: (nullable): the heading of @self.
  *
  * Since: 1.2
+ * Deprecated: 1.6: Use [class@AlertDialog].
  */
 const char *
 adw_message_dialog_get_heading (AdwMessageDialog *self)
@@ -1138,13 +1508,14 @@ adw_message_dialog_get_heading (AdwMessageDialog *self)
 }
 
 /**
- * adw_message_dialog_set_heading: (attributes org.gtk.Method.set_property=heading)
+ * adw_message_dialog_set_heading:
  * @self: a message dialog
  * @heading: (nullable): the heading of @self
  *
  * Sets the heading of @self.
  *
  * Since: 1.2
+ * Deprecated: 1.6: Use [class@AlertDialog].
  */
 void
 adw_message_dialog_set_heading (AdwMessageDialog *self,
@@ -1157,14 +1528,18 @@ adw_message_dialog_set_heading (AdwMessageDialog *self,
 
   priv = adw_message_dialog_get_instance_private (self);
 
-  if (heading == priv->heading)
+  if (!g_set_str (&priv->heading, heading))
     return;
 
-  g_free (priv->heading);
-  priv->heading = g_strdup (heading);
-
   gtk_label_set_label (GTK_LABEL (priv->heading_label), heading);
-  gtk_widget_set_visible (priv->heading_label, heading && *heading);
+  gtk_label_set_label (GTK_LABEL (priv->heading_label_small), heading);
+
+  gtk_widget_set_visible (priv->heading_bin, heading && *heading);
+
+  if (heading && *heading)
+    gtk_widget_add_css_class (GTK_WIDGET (priv->message_area), "has-heading");
+  else
+    gtk_widget_remove_css_class (GTK_WIDGET (priv->message_area), "has-heading");
 
   update_window_title (self);
 
@@ -1172,7 +1547,7 @@ adw_message_dialog_set_heading (AdwMessageDialog *self,
 }
 
 /**
- * adw_message_dialog_get_heading_use_markup: (attributes org.gtk.Method.get_property=heading-use-markup)
+ * adw_message_dialog_get_heading_use_markup:
  * @self: a message dialog
  *
  * Gets whether the heading of @self includes Pango markup.
@@ -1180,6 +1555,7 @@ adw_message_dialog_set_heading (AdwMessageDialog *self,
  * Returns: whether @self uses markup for heading
  *
  * Since: 1.2
+ * Deprecated: 1.6: Use [class@AlertDialog].
  */
 gboolean
 adw_message_dialog_get_heading_use_markup (AdwMessageDialog *self)
@@ -1194,7 +1570,7 @@ adw_message_dialog_get_heading_use_markup (AdwMessageDialog *self)
 }
 
 /**
- * adw_message_dialog_set_heading_use_markup: (attributes org.gtk.Method.set_property=heading-use-markup)
+ * adw_message_dialog_set_heading_use_markup:
  * @self: a message dialog
  * @use_markup: whether to use markup for heading
  *
@@ -1203,6 +1579,7 @@ adw_message_dialog_get_heading_use_markup (AdwMessageDialog *self)
  * See [func@Pango.parse_markup].
  *
  * Since: 1.2
+ * Deprecated: 1.6: Use [class@AlertDialog].
  */
 void
 adw_message_dialog_set_heading_use_markup (AdwMessageDialog *self,
@@ -1222,6 +1599,7 @@ adw_message_dialog_set_heading_use_markup (AdwMessageDialog *self,
   priv->heading_use_markup = use_markup;
 
   gtk_label_set_use_markup (GTK_LABEL (priv->heading_label), use_markup);
+  gtk_label_set_use_markup (GTK_LABEL (priv->heading_label_small), use_markup);
 
   update_window_title (self);
 
@@ -1240,6 +1618,7 @@ adw_message_dialog_set_heading_use_markup (AdwMessageDialog *self,
  * See [property@MessageDialog:heading].
  *
  * Since: 1.2
+ * Deprecated: 1.6: Use [class@AlertDialog].
  */
 void
 adw_message_dialog_format_heading (AdwMessageDialog *self,
@@ -1289,6 +1668,7 @@ adw_message_dialog_format_heading (AdwMessageDialog *self,
  * See [property@MessageDialog:heading].
  *
  * Since: 1.2
+ * Deprecated: 1.6: Use [class@AlertDialog].
  */
 void
 adw_message_dialog_format_heading_markup (AdwMessageDialog *self,
@@ -1322,7 +1702,7 @@ adw_message_dialog_format_heading_markup (AdwMessageDialog *self,
 }
 
 /**
- * adw_message_dialog_get_body: (attributes org.gtk.Method.get_property=body)
+ * adw_message_dialog_get_body:
  * @self: a message dialog
  *
  * Gets the body text of @self.
@@ -1330,6 +1710,7 @@ adw_message_dialog_format_heading_markup (AdwMessageDialog *self,
  * Returns: the body of @self.
  *
  * Since: 1.2
+ * Deprecated: 1.6: Use [class@AlertDialog].
  */
 const char *
 adw_message_dialog_get_body (AdwMessageDialog *self)
@@ -1344,13 +1725,14 @@ adw_message_dialog_get_body (AdwMessageDialog *self)
 }
 
 /**
- * adw_message_dialog_set_body: (attributes org.gtk.Method.set_property=body)
+ * adw_message_dialog_set_body:
  * @self: a message dialog
  * @body: the body of @self
  *
  * Sets the body text of @self.
  *
  * Since: 1.2
+ * Deprecated: 1.6: Use [class@AlertDialog].
  */
 void
 adw_message_dialog_set_body (AdwMessageDialog *self,
@@ -1363,20 +1745,22 @@ adw_message_dialog_set_body (AdwMessageDialog *self,
 
   priv = adw_message_dialog_get_instance_private (self);
 
-  if (body == priv->body)
+  if (!g_set_str (&priv->body, body))
     return;
-
-  g_free (priv->body);
-  priv->body = g_strdup (body);
 
   gtk_label_set_label (GTK_LABEL (priv->body_label), body);
   gtk_widget_set_visible (priv->body_label, body && *body);
+
+  if (body && *body)
+    gtk_widget_add_css_class (GTK_WIDGET (priv->message_area), "has-body");
+  else
+    gtk_widget_remove_css_class (GTK_WIDGET (priv->message_area), "has-body");
 
   g_object_notify_by_pspec (G_OBJECT (self), props[PROP_BODY]);
 }
 
 /**
- * adw_message_dialog_get_body_use_markup: (attributes org.gtk.Method.get_property=body-use-markup)
+ * adw_message_dialog_get_body_use_markup:
  * @self: a message dialog
  *
  * Gets whether the body text of @self includes Pango markup.
@@ -1384,6 +1768,7 @@ adw_message_dialog_set_body (AdwMessageDialog *self,
  * Returns: whether @self uses markup for body text
  *
  * Since: 1.2
+ * Deprecated: 1.6: Use [class@AlertDialog].
  */
 gboolean
 adw_message_dialog_get_body_use_markup (AdwMessageDialog *self)
@@ -1398,7 +1783,7 @@ adw_message_dialog_get_body_use_markup (AdwMessageDialog *self)
 }
 
 /**
- * adw_message_dialog_set_body_use_markup: (attributes org.gtk.Method.set_property=body-use-markup)
+ * adw_message_dialog_set_body_use_markup:
  * @self: a message dialog
  * @use_markup: whether to use markup for body text
  *
@@ -1407,6 +1792,7 @@ adw_message_dialog_get_body_use_markup (AdwMessageDialog *self)
  * See [func@Pango.parse_markup].
  *
  * Since: 1.2
+ * Deprecated: 1.6: Use [class@AlertDialog].
  */
 void
 adw_message_dialog_set_body_use_markup (AdwMessageDialog *self,
@@ -1441,6 +1827,7 @@ adw_message_dialog_set_body_use_markup (AdwMessageDialog *self,
  * See [property@MessageDialog:body].
  *
  * Since: 1.2
+ * Deprecated: 1.6: Use [class@AlertDialog].
  */
 void
 adw_message_dialog_format_body (AdwMessageDialog *self,
@@ -1490,6 +1877,7 @@ adw_message_dialog_format_body (AdwMessageDialog *self,
  * See [property@MessageDialog:body].
  *
  * Since: 1.2
+ * Deprecated: 1.6: Use [class@AlertDialog].
  */
 void
 adw_message_dialog_format_body_markup (AdwMessageDialog *self,
@@ -1523,7 +1911,7 @@ adw_message_dialog_format_body_markup (AdwMessageDialog *self,
 }
 
 /**
- * adw_message_dialog_get_extra_child: (attributes org.gtk.Method.get_property=extra-child)
+ * adw_message_dialog_get_extra_child:
  * @self: a message dialog
  *
  * Gets the child widget of @self.
@@ -1531,6 +1919,7 @@ adw_message_dialog_format_body_markup (AdwMessageDialog *self,
  * Returns: (nullable) (transfer none): the child widget of @self.
  *
  * Since: 1.2
+ * Deprecated: 1.6: Use [class@AlertDialog].
  */
 GtkWidget *
 adw_message_dialog_get_extra_child (AdwMessageDialog *self)
@@ -1545,7 +1934,7 @@ adw_message_dialog_get_extra_child (AdwMessageDialog *self)
 }
 
 /**
- * adw_message_dialog_set_extra_child: (attributes org.gtk.Method.set_property=extra-child)
+ * adw_message_dialog_set_extra_child:
  * @self: a message dialog
  * @child: (nullable): the child widget
  *
@@ -1554,6 +1943,7 @@ adw_message_dialog_get_extra_child (AdwMessageDialog *self)
  * The child widget is displayed below the heading and body.
  *
  * Since: 1.2
+ * Deprecated: 1.6: Use [class@AlertDialog].
  */
 void
 adw_message_dialog_set_extra_child (AdwMessageDialog *self,
@@ -1562,19 +1952,19 @@ adw_message_dialog_set_extra_child (AdwMessageDialog *self,
   AdwMessageDialogPrivate *priv;
 
   g_return_if_fail (ADW_IS_MESSAGE_DIALOG (self));
+  g_return_if_fail (child == NULL || GTK_IS_WIDGET (child));
 
   priv = adw_message_dialog_get_instance_private (self);
 
   if (child == priv->child)
     return;
 
-  if (priv->child)
-    gtk_box_remove (priv->message_area, priv->child);
+  if (child)
+    g_return_if_fail (gtk_widget_get_parent (child) == NULL);
 
   priv->child = child;
-
-  if (priv->child)
-    gtk_box_append (priv->message_area, priv->child);
+  adw_bin_set_child (ADW_BIN (priv->child_bin), child);
+  gtk_widget_set_visible (priv->child_bin, child != NULL);
 
   g_object_notify_by_pspec (G_OBJECT (self), props[PROP_EXTRA_CHILD]);
 }
@@ -1603,6 +1993,7 @@ adw_message_dialog_set_extra_child (AdwMessageDialog *self,
  * responses further.
  *
  * Since: 1.2
+ * Deprecated: 1.6: Use [class@AlertDialog].
  */
 void
 adw_message_dialog_add_response (AdwMessageDialog *self,
@@ -1632,31 +2023,14 @@ adw_message_dialog_add_response (AdwMessageDialog *self,
   info->appearance = ADW_RESPONSE_DEFAULT;
   info->enabled = TRUE;
 
-  if (priv->responses) {
-    GtkWidget *separator = gtk_separator_new (GTK_ORIENTATION_VERTICAL);
-    gtk_box_append (priv->wide_response_box, separator);
-  }
-
-  info->wide_button = create_response_button (self, info);
-  gtk_widget_set_hexpand (info->wide_button, TRUE);
-  gtk_box_append (priv->wide_response_box, info->wide_button);
-  gtk_size_group_add_widget (priv->wide_size_group, info->wide_button);
-
-  if (priv->responses) {
-    GtkWidget *separator = gtk_separator_new (GTK_ORIENTATION_HORIZONTAL);
-    gtk_box_prepend (priv->narrow_response_box, separator);
-  }
-
-  info->narrow_button = create_response_button (self, info);
-  gtk_box_prepend (priv->narrow_response_box, info->narrow_button);
-  gtk_size_group_add_widget (priv->narrow_size_group, info->narrow_button);
+  info->button = create_response_button (self, info);
+  gtk_widget_set_parent (info->button, priv->response_area);
 
   priv->responses = g_list_append (priv->responses, info);
   g_hash_table_insert (priv->id_to_response, g_strdup (id), info);
 
-  if (priv->default_response == info->id &&
-      gtk_widget_get_mapped (GTK_WIDGET (self)))
-    update_default_response (self);
+  if (priv->default_response == info->id)
+    gtk_window_set_default_widget (GTK_WINDOW (self), info->button);
 }
 
 /**
@@ -1682,6 +2056,7 @@ adw_message_dialog_add_response (AdwMessageDialog *self,
  * ```
  *
  * Since: 1.2
+ * Deprecated: 1.6: Use [class@AlertDialog].
  */
 void
 adw_message_dialog_add_responses (AdwMessageDialog *self,
@@ -1693,10 +2068,10 @@ adw_message_dialog_add_responses (AdwMessageDialog *self,
 
   g_return_if_fail (ADW_IS_MESSAGE_DIALOG (self));
 
-  va_start (args, first_id);
-
   if (!first_id)
     return;
+
+  va_start (args, first_id);
 
   id = first_id;
   label = va_arg (args, const char *);
@@ -1715,6 +2090,47 @@ adw_message_dialog_add_responses (AdwMessageDialog *self,
 }
 
 /**
+ * adw_message_dialog_remove_response:
+ * @self: a message dialog
+ * @id: the response ID
+ *
+ * Removes a response from @self.
+ *
+ * Since: 1.5
+ * Deprecated: 1.6: Use [class@AlertDialog].
+ */
+void
+adw_message_dialog_remove_response (AdwMessageDialog *self,
+                                    const char       *id)
+{
+  AdwMessageDialogPrivate *priv;
+  ResponseInfo *info;
+
+  g_return_if_fail (ADW_IS_MESSAGE_DIALOG (self));
+  g_return_if_fail (id != NULL);
+
+  priv = adw_message_dialog_get_instance_private (self);
+  info = find_response (self, id);
+
+  if (!info) {
+    g_critical ("Trying to remove a response with id '%s' from an "
+                "AdwMessageDialog, but such a response does not exist",
+                id);
+    return;
+  }
+
+  if (priv->default_response == info->id)
+    gtk_window_set_default_widget (GTK_WINDOW (self), NULL);
+
+  gtk_widget_unparent (info->button);
+
+  priv->responses = g_list_remove (priv->responses, info);
+  g_hash_table_remove (priv->id_to_response, id);
+
+  response_info_free (info);
+}
+
+/**
  * adw_message_dialog_get_response_label:
  * @self: a message dialog
  * @response: a response ID
@@ -1726,6 +2142,7 @@ adw_message_dialog_add_responses (AdwMessageDialog *self,
  * Returns: the label of @response
  *
  * Since: 1.2
+ * Deprecated: 1.6: Use [class@AlertDialog].
  */
 const char *
 adw_message_dialog_get_response_label (AdwMessageDialog *self,
@@ -1754,6 +2171,7 @@ adw_message_dialog_get_response_label (AdwMessageDialog *self,
  * indicates a mnemonic.
  *
  * Since: 1.2
+ * Deprecated: 1.6: Use [class@AlertDialog].
  */
 void
 adw_message_dialog_set_response_label (AdwMessageDialog *self,
@@ -1769,11 +2187,9 @@ adw_message_dialog_set_response_label (AdwMessageDialog *self,
 
   info = find_response (self, response);
 
-  g_free (info->label);
-  info->label = g_strdup (label);
+  g_set_str (&info->label, label);
 
-  gtk_button_set_label (GTK_BUTTON (info->wide_button), label);
-  gtk_button_set_label (GTK_BUTTON (info->narrow_button), label);
+  gtk_button_set_label (GTK_BUTTON (info->button), label);
 }
 
 /**
@@ -1788,6 +2204,7 @@ adw_message_dialog_set_response_label (AdwMessageDialog *self,
  * Returns: the appearance of @response
  *
  * Since: 1.2
+ * Deprecated: 1.6: Use [class@AlertDialog].
  */
 AdwResponseAppearance
 adw_message_dialog_get_response_appearance (AdwMessageDialog *self,
@@ -1829,6 +2246,7 @@ adw_message_dialog_get_response_appearance (AdwMessageDialog *self,
  * Negative responses like Cancel or Close should use the default appearance.
  *
  * Since: 1.2
+ * Deprecated: 1.6: Use [class@AlertDialog].
  */
 void
 adw_message_dialog_set_response_appearance (AdwMessageDialog      *self,
@@ -1850,21 +2268,15 @@ adw_message_dialog_set_response_appearance (AdwMessageDialog      *self,
 
   info->appearance = appearance;
 
-  if (info->appearance == ADW_RESPONSE_SUGGESTED) {
-    gtk_widget_add_css_class (info->wide_button, "suggested");
-    gtk_widget_add_css_class (info->narrow_button, "suggested");
-  } else {
-    gtk_widget_remove_css_class (info->wide_button, "suggested");
-    gtk_widget_remove_css_class (info->narrow_button, "suggested");
-  }
+  if (info->appearance == ADW_RESPONSE_SUGGESTED)
+    gtk_widget_add_css_class (info->button, "suggested-action");
+  else
+    gtk_widget_remove_css_class (info->button, "suggested-action");
 
-  if (info->appearance == ADW_RESPONSE_DESTRUCTIVE) {
-    gtk_widget_add_css_class (info->wide_button, "destructive");
-    gtk_widget_add_css_class (info->narrow_button, "destructive");
-  } else {
-    gtk_widget_remove_css_class (info->wide_button, "destructive");
-    gtk_widget_remove_css_class (info->narrow_button, "destructive");
-  }
+  if (info->appearance == ADW_RESPONSE_DESTRUCTIVE)
+    gtk_widget_add_css_class (info->button, "destructive-action");
+  else
+    gtk_widget_remove_css_class (info->button, "destructive-action");
 }
 
 /**
@@ -1879,6 +2291,7 @@ adw_message_dialog_set_response_appearance (AdwMessageDialog      *self,
  * Returns: whether @response is enabled
  *
  * Since: 1.2
+ * Deprecated: 1.6: Use [class@AlertDialog].
  */
 gboolean
 adw_message_dialog_get_response_enabled (AdwMessageDialog *self,
@@ -1913,6 +2326,7 @@ adw_message_dialog_get_response_enabled (AdwMessageDialog *self,
  * Responses are enabled by default.
  *
  * Since: 1.2
+ * Deprecated: 1.6: Use [class@AlertDialog].
  */
 void
 adw_message_dialog_set_response_enabled (AdwMessageDialog *self,
@@ -1934,12 +2348,11 @@ adw_message_dialog_set_response_enabled (AdwMessageDialog *self,
 
   info->enabled = enabled;
 
-  gtk_widget_set_sensitive (info->wide_button, info->enabled);
-  gtk_widget_set_sensitive (info->narrow_button, info->enabled);
+  gtk_widget_set_sensitive (info->button, info->enabled);
 }
 
 /**
- * adw_message_dialog_get_default_response: (attributes org.gtk.Method.get_property=default-response)
+ * adw_message_dialog_get_default_response:
  * @self: a message dialog
  *
  * Gets the ID of the default response of @self.
@@ -1947,6 +2360,7 @@ adw_message_dialog_set_response_enabled (AdwMessageDialog *self,
  * Returns: (nullable): the default response ID
  *
  * Since: 1.2
+ * Deprecated: 1.6: Use [class@AlertDialog].
  */
 const char *
 adw_message_dialog_get_default_response (AdwMessageDialog *self)
@@ -1964,7 +2378,7 @@ adw_message_dialog_get_default_response (AdwMessageDialog *self)
 }
 
 /**
- * adw_message_dialog_set_default_response: (attributes org.gtk.Method.set_property=default-response)
+ * adw_message_dialog_set_default_response:
  * @self: a message dialog
  * @response: (nullable): the default response ID
  *
@@ -1976,6 +2390,7 @@ adw_message_dialog_get_default_response (AdwMessageDialog *self)
  * will do nothing.
  *
  * Since: 1.2
+ * Deprecated: 1.6: Use [class@AlertDialog].
  */
 void
 adw_message_dialog_set_default_response (AdwMessageDialog *self,
@@ -1983,6 +2398,7 @@ adw_message_dialog_set_default_response (AdwMessageDialog *self,
 {
   AdwMessageDialogPrivate *priv;
   GQuark quark;
+  ResponseInfo *info;
 
   g_return_if_fail (ADW_IS_MESSAGE_DIALOG (self));
 
@@ -1994,14 +2410,16 @@ adw_message_dialog_set_default_response (AdwMessageDialog *self,
 
   priv->default_response = quark;
 
-  if (gtk_widget_get_mapped (GTK_WIDGET (self)))
-    update_default_response (self);
+  info = find_response (self, response);
+
+  if (info)
+    gtk_window_set_default_widget (GTK_WINDOW (self), info->button);
 
   g_object_notify_by_pspec (G_OBJECT (self), props[PROP_DEFAULT_RESPONSE]);
 }
 
 /**
- * adw_message_dialog_get_close_response: (attributes org.gtk.Method.get_property=close-response)
+ * adw_message_dialog_get_close_response:
  * @self: a message dialog
  *
  * Gets the ID of the close response of @self.
@@ -2009,6 +2427,7 @@ adw_message_dialog_set_default_response (AdwMessageDialog *self,
  * Returns: the close response ID
  *
  * Since: 1.2
+ * Deprecated: 1.6: Use [class@AlertDialog].
  */
 const char *
 adw_message_dialog_get_close_response (AdwMessageDialog *self)
@@ -2023,7 +2442,7 @@ adw_message_dialog_get_close_response (AdwMessageDialog *self)
 }
 
 /**
- * adw_message_dialog_set_close_response: (attributes org.gtk.Method.set_property=close-response)
+ * adw_message_dialog_set_close_response:
  * @self: a message dialog
  * @response: the close response ID
  *
@@ -2037,6 +2456,7 @@ adw_message_dialog_get_close_response (AdwMessageDialog *self)
  * The default close response is `close`.
  *
  * Since: 1.2
+ * Deprecated: 1.6: Use [class@AlertDialog].
  */
 void
 adw_message_dialog_set_close_response (AdwMessageDialog *self,
@@ -2069,6 +2489,7 @@ adw_message_dialog_set_close_response (AdwMessageDialog *self,
  * Used to indicate that the user has responded to the dialog in some way.
  *
  * Since: 1.2
+ * Deprecated: 1.6: Use [class@AlertDialog].
  */
 void
 adw_message_dialog_response (AdwMessageDialog *self,
@@ -2091,6 +2512,7 @@ adw_message_dialog_response (AdwMessageDialog *self,
  * Returns: whether @self has a response with the ID @response.
  *
  * Since: 1.2
+ * Deprecated: 1.6: Use [class@AlertDialog].
  */
 gboolean
 adw_message_dialog_has_response (AdwMessageDialog *self,
@@ -2101,3 +2523,94 @@ adw_message_dialog_has_response (AdwMessageDialog *self,
 
   return find_response (self, response) != NULL;
 }
+
+static void choose_cancelled_cb (GCancellable *cancellable,
+                                 GTask        *task);
+
+static void
+choose_response_cb (AdwMessageDialog *dialog,
+                    const char       *response,
+                    GTask            *task)
+{
+  GCancellable *cancellable = g_task_get_cancellable (task);
+
+  if (cancellable)
+    g_signal_handlers_disconnect_by_func (cancellable, choose_cancelled_cb, task);
+
+  g_signal_handlers_disconnect_by_func (dialog, choose_response_cb, task);
+
+  g_task_return_int (task, g_quark_from_string (response));
+
+  g_object_unref (task);
+}
+
+static void
+choose_cancelled_cb (GCancellable *cancellable,
+                     GTask        *task)
+{
+  AdwMessageDialog *self = g_task_get_source_object (task);
+  AdwMessageDialogPrivate *priv = adw_message_dialog_get_instance_private (self);
+
+  emit_response (self, priv->close_response);
+}
+
+/**
+ * adw_message_dialog_choose:
+ * @self: a message dialog
+ * @cancellable: (nullable): a `GCancellable` to cancel the operation
+ * @callback: (scope async): a callback to call when the operation is complete
+ * @user_data: data to pass to @callback
+ *
+ * This function shows @self to the user.
+ *
+ * Since: 1.3
+ * Deprecated: 1.6: Use [class@AlertDialog].
+ */
+void
+adw_message_dialog_choose (AdwMessageDialog    *self,
+                           GCancellable        *cancellable,
+                           GAsyncReadyCallback  callback,
+                           gpointer             user_data)
+{
+  GTask *task;
+
+  g_return_if_fail (ADW_IS_MESSAGE_DIALOG (self));
+
+  task = g_task_new (self, cancellable, callback, user_data);
+  g_task_set_source_tag (task, adw_message_dialog_choose);
+
+  if (cancellable)
+    g_signal_connect (cancellable, "cancelled", G_CALLBACK (choose_cancelled_cb), task);
+
+  g_signal_connect (self, "response", G_CALLBACK (choose_response_cb), task);
+
+  gtk_window_present (GTK_WINDOW (self));
+}
+
+/**
+ * adw_message_dialog_choose_finish:
+ * @self: a message dialog
+ * @result: a `GAsyncResult`
+ *
+ * Finishes the [method@MessageDialog.choose] call and returns the response ID.
+ *
+ * Returns: the ID of the response that was selected, or
+ *   [property@MessageDialog:close-response] if the call was cancelled.
+ *
+ * Since: 1.3
+ * Deprecated: 1.6: Use [class@AlertDialog].
+ */
+const char *
+adw_message_dialog_choose_finish (AdwMessageDialog *self,
+                                  GAsyncResult     *result)
+{
+  GQuark id;
+  g_return_val_if_fail (ADW_IS_MESSAGE_DIALOG (self), NULL);
+  g_return_val_if_fail (g_task_is_valid (result, self), NULL);
+  g_return_val_if_fail (g_task_get_source_tag (G_TASK (result)) == adw_message_dialog_choose, NULL);
+
+  id = g_task_propagate_int (G_TASK (result), NULL);
+
+  return g_quark_to_string (id);
+}
+

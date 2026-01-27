@@ -1,24 +1,29 @@
+Description: Disable test build for Gooroom
+ Build tests are disabled to avoid build issues in Gooroom environment.
+Author: Gooroom Team <gooroom@gooroom.kr>
+Forwarded: not-needed
+
 diff --git a/meson.build b/meson.build
-index b5bb39c..60b1e66 100644
+index 1234567..abcdefg 100644
 --- a/meson.build
 +++ b/meson.build
-@@ -134,7 +134,7 @@ subdir('src')
+@@ -144,7 +144,7 @@ subdir('src')
  subdir('po')
  subdir('demo')
  subdir('examples')
 -subdir('tests')
 +#subdir('tests')
  subdir('doc')
- 
+
  run_data = configuration_data()
-@@ -149,9 +149,9 @@ if not meson.is_subproject()
-     meson.add_dist_script('build-aux'/ 'meson'/ 'dist-data.py')
- endif
- 
+@@ -155,9 +155,9 @@ configure_file(
+          output: 'run',
+   configuration: run_data)
+
 +#    'Tests': get_option('tests'),
  summary(
    {
 -    'Tests': get_option('tests'),
      'Examples': get_option('examples'),
-     'Documentation': get_option('gtk_doc'),
+     'Documentation': get_option('documentation'),
      'Introspection': introspection,

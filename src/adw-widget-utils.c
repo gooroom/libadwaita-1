@@ -17,6 +17,9 @@
 
 #include "adw-widget-utils-private.h"
 
+#include "adw-bottom-sheet-private.h"
+#include "adw-floating-sheet-private.h"
+
 typedef struct _CompareInfo CompareInfo;
 
 enum Axis {
@@ -83,14 +86,14 @@ tab_sort_func (gconstpointer a,
   y1 = child_bounds1.origin.y + (child_bounds1.size.height / 2.0f);
   y2 = child_bounds2.origin.y + (child_bounds2.size.height / 2.0f);
 
-  if (y1 == y2) {
+  if (G_APPROX_VALUE (y1, y2, FLT_EPSILON)) {
     const float x1 = child_bounds1.origin.x + (child_bounds1.size.width / 2.0f);
     const float x2 = child_bounds2.origin.x + (child_bounds2.size.width / 2.0f);
 
     if (text_direction == GTK_TEXT_DIR_RTL)
-      return (x1 < x2) ? 1 : ((x1 == x2) ? 0 : -1);
+      return (x1 < x2) ? 1 : (G_APPROX_VALUE (x1, x2, FLT_EPSILON) ? 0 : -1);
     else
-      return (x1 < x2) ? -1 : ((x1 == x2) ? 0 : 1);
+      return (x1 < x2) ? -1 : (G_APPROX_VALUE (x1, x2, FLT_EPSILON) ? 0 : 1);
   }
 
   return (y1 < y2) ? -1 : 1;
@@ -235,7 +238,8 @@ focus_sort_left_right (GtkWidget        *widget,
           const float child_y1 = child_bounds.origin.y;
           const float child_y2 = child_bounds.origin.y + child_bounds.size.height;
 
-          if ((child_y2 <= compare_y1 || child_y1 >= compare_y2) /* No vertical overlap */ ||
+          if ((G_APPROX_VALUE (child_y2, compare_y1, FLT_EPSILON) || child_y2 < compare_y1 ||
+               G_APPROX_VALUE (child_y1, compare_y2, FLT_EPSILON) || child_y1 > compare_y2) /* No vertical overlap */ ||
               (direction == GTK_DIR_RIGHT && child_bounds.origin.x + child_bounds.size.width < compare_x) || /* Not to left */
               (direction == GTK_DIR_LEFT && child_bounds.origin.x > compare_x)) /* Not to right */ {
             g_ptr_array_remove_index (focus_order, i);
@@ -324,7 +328,8 @@ focus_sort_up_down (GtkWidget        *widget,
           const float child_x1 = child_bounds.origin.x;
           const float child_x2 = child_bounds.origin.x + child_bounds.size.width;
 
-          if ((child_x2 <= compare_x1 || child_x1 >= compare_x2) /* No horizontal overlap */ ||
+          if ((G_APPROX_VALUE (child_x2, compare_x1, FLT_EPSILON) || child_x2 < compare_x1 ||
+               G_APPROX_VALUE (child_x1, compare_x2, FLT_EPSILON) || child_x1 > compare_x2) /* No horizontal overlap */ ||
               (direction == GTK_DIR_DOWN && child_bounds.origin.y + child_bounds.size.height < compare_y) || /* Not below */
               (direction == GTK_DIR_UP && child_bounds.origin.y > compare_y)) /* Not above */ {
             g_ptr_array_remove_index (focus_order, i);
@@ -475,6 +480,15 @@ adw_widget_grab_focus_child (GtkWidget *widget)
   return FALSE;
 }
 
+gboolean
+adw_widget_grab_focus_child_or_self (GtkWidget *widget)
+{
+  if (adw_widget_grab_focus_child (widget))
+    return TRUE;
+
+  return adw_widget_grab_focus_self (widget);
+}
+
 void
 adw_widget_compute_expand (GtkWidget *widget,
                            gboolean  *hexpand_p,
@@ -542,4 +556,210 @@ adw_widget_get_request_mode (GtkWidget *widget)
     return wfh > hfw ?
         GTK_SIZE_REQUEST_WIDTH_FOR_HEIGHT :
         GTK_SIZE_REQUEST_HEIGHT_FOR_WIDTH;
+}
+
+gboolean
+adw_widget_contains_passthrough (GtkWidget *widget,
+                                 double     x,
+                                 double     y)
+{
+  return FALSE;
+}
+
+/* FIXME: Replace this with public color API and make public */
+gboolean
+adw_widget_lookup_color (GtkWidget  *widget,
+                         const char *name,
+                         GdkRGBA    *rgba)
+{
+G_GNUC_BEGIN_IGNORE_DEPRECATIONS
+  GtkStyleContext *context = gtk_widget_get_style_context (widget);
+
+  return gtk_style_context_lookup_color (context, name, rgba);
+G_GNUC_END_IGNORE_DEPRECATIONS
+}
+
+GtkWidget *
+adw_widget_get_ancestor (GtkWidget *widget,
+                         GType      widget_type,
+                         gboolean   same_native,
+                         gboolean   same_sheet)
+{
+  GtkWidget *prev_widget = NULL;
+
+  while (widget && !g_type_is_a (G_OBJECT_TYPE (widget), widget_type)) {
+    if (same_native && GTK_IS_NATIVE (widget))
+      return NULL;
+
+    if (same_sheet) {
+      if (ADW_IS_FLOATING_SHEET (widget)) {
+        if (prev_widget == adw_floating_sheet_get_sheet_bin (ADW_FLOATING_SHEET (widget)))
+          return NULL;
+      }
+
+      if (ADW_IS_BOTTOM_SHEET (widget)) {
+        if (prev_widget == adw_bottom_sheet_get_sheet_bin (ADW_BOTTOM_SHEET (widget)))
+          return NULL;
+      }
+    }
+
+    prev_widget = widget;
+    widget = gtk_widget_get_parent (widget);
+  }
+
+  return widget;
+}
+
+gboolean
+adw_decoration_layout_prefers_start (const char *layout)
+{
+  int counts[2];
+  char **sides;
+  int i;
+
+  if (!layout || !strchr (layout, ':'))
+    return FALSE;
+
+  sides = g_strsplit (layout, ":", 2);
+
+  for (i = 0; i < 2; i++) {
+    char **elements;
+    int j;
+
+    counts[i] = 0;
+
+    if (sides[i] == NULL)
+      continue;
+
+    elements = g_strsplit (sides[i], ",", -1);
+
+    for (j = 0; elements[j]; j++) {
+      if (!g_strcmp0 (elements[j], "close"))
+        counts[i]++;
+    }
+
+    g_strfreev (elements);
+  }
+
+  g_strfreev (sides);
+
+  return counts[0] > counts[1];
+}
+
+/* Copied and modified from gtklabel.c, separate_uline_pattern() */
+char *
+adw_strip_mnemonic (const char *src)
+{
+  char *new_str = g_new (char, strlen (src) + 1);
+  char *dest = new_str;
+  gboolean underscore = FALSE;
+
+  while (*src) {
+    gunichar c;
+    const char *next_src;
+
+    c = g_utf8_get_char (src);
+    if (c == (gunichar) -1) {
+      g_warning ("Invalid input string");
+
+      g_free (new_str);
+
+      return NULL;
+    }
+
+    next_src = g_utf8_next_char (src);
+
+    if (underscore) {
+      while (src < next_src)
+        *dest++ = *src++;
+
+      underscore = FALSE;
+    } else {
+      if (c == '_'){
+        underscore = TRUE;
+        src = next_src;
+      } else {
+        while (src < next_src)
+          *dest++ = *src++;
+      }
+    }
+  }
+
+  *dest = 0;
+
+  return new_str;
+}
+
+/*
+ * Some widgets intentionally request less size than is required to
+ * fully fit their children, and then overallocate the children. This
+ * function increases the proposed allocation to ensure the child gets
+ * at least the size that it requires.
+ */
+void
+adw_ensure_child_allocation_size (GtkWidget     *child,
+                                  GtkAllocation *allocation)
+{
+  int min, width, height;
+
+  if (gtk_widget_get_request_mode (child) == GTK_SIZE_REQUEST_WIDTH_FOR_HEIGHT) {
+    gtk_widget_measure (child, GTK_ORIENTATION_VERTICAL, -1,
+                        &min, NULL, NULL, NULL);
+    height = MAX (allocation->height, min);
+    gtk_widget_measure (child, GTK_ORIENTATION_HORIZONTAL, height,
+                        &min, NULL, NULL, NULL);
+    width = MAX (allocation->width, min);
+  } else {
+    /* GTK_SIZE_REQUEST_HEIGHT_FOR_WIDTH or CONSTANT_SIZE */
+    gtk_widget_measure (child, GTK_ORIENTATION_HORIZONTAL, -1,
+                        &min, NULL, NULL, NULL);
+    width = MAX (allocation->width, min);
+    gtk_widget_measure (child, GTK_ORIENTATION_VERTICAL, width,
+                        &min, NULL, NULL, NULL);
+    height = MAX (allocation->height, min);
+  }
+
+  if (width > allocation->width) {
+    GtkAlign halign = gtk_widget_get_halign (child);
+
+    if (halign == GTK_ALIGN_CENTER || halign == GTK_ALIGN_FILL)
+      allocation->x -= (width - allocation->width) / 2;
+    else if (halign == GTK_ALIGN_END)
+      allocation->x -= (width - allocation->width);
+
+    allocation->width = width;
+  }
+
+  if (height > allocation->height) {
+    GtkAlign valign = gtk_widget_get_valign (child);
+
+    if (valign == GTK_ALIGN_CENTER || valign == GTK_ALIGN_FILL)
+      allocation->y -= (height - allocation->height) / 2;
+    else if (valign == GTK_ALIGN_END)
+      allocation->y -= (height - allocation->height);
+
+    allocation->height = height;
+  }
+}
+
+gboolean
+adw_get_inspector_keybinding_enabled (void)
+{
+  GSettingsSchema *schema;
+  gboolean enabled;
+
+  enabled = TRUE;
+
+  schema = g_settings_schema_source_lookup (g_settings_schema_source_get_default (),
+                                            "org.gtk.gtk4.Settings.Debug",
+                                            TRUE);
+
+  if (schema) {
+    GSettings *settings = g_settings_new_full (schema, NULL, NULL);
+    enabled = g_settings_get_boolean (settings, "enable-inspector-keybinding");
+    g_object_unref (settings);
+    g_settings_schema_unref (schema);
+  }
+
+  return enabled;
 }

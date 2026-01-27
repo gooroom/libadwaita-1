@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019 Alexander Mikhaylenko <exalm7659@gmail.com>
+ * Copyright (C) 2019 Alice Mikhaylenko <alicem@gnome.org>
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
  */
@@ -51,6 +51,24 @@ gboolean adw_swipe_tracker_get_allow_long_swipes (AdwSwipeTracker *self);
 ADW_AVAILABLE_IN_ALL
 void     adw_swipe_tracker_set_allow_long_swipes (AdwSwipeTracker *self,
                                                   gboolean         allow_long_swipes);
+
+ADW_AVAILABLE_IN_1_4
+gboolean adw_swipe_tracker_get_lower_overshoot (AdwSwipeTracker *self);
+ADW_AVAILABLE_IN_1_4
+void     adw_swipe_tracker_set_lower_overshoot (AdwSwipeTracker *self,
+                                                gboolean         overshoot);
+
+ADW_AVAILABLE_IN_1_4
+gboolean adw_swipe_tracker_get_upper_overshoot (AdwSwipeTracker *self);
+ADW_AVAILABLE_IN_1_4
+void     adw_swipe_tracker_set_upper_overshoot (AdwSwipeTracker *self,
+                                                gboolean         overshoot);
+
+ADW_AVAILABLE_IN_1_5
+gboolean adw_swipe_tracker_get_allow_window_handle (AdwSwipeTracker *self);
+ADW_AVAILABLE_IN_1_5
+void     adw_swipe_tracker_set_allow_window_handle (AdwSwipeTracker *self,
+                                                    gboolean         allow_window_handle);
 
 ADW_AVAILABLE_IN_ALL
 void adw_swipe_tracker_shift_position (AdwSwipeTracker *self,

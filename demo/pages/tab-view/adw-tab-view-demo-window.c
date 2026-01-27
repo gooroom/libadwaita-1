@@ -2,45 +2,22 @@
 
 #include <glib/gi18n.h>
 
+#include "adw-tab-view-demo-page.h"
+
 struct _AdwTabViewDemoWindow
 {
   AdwWindow parent_instance;
   AdwTabView *view;
   AdwTabBar *tab_bar;
+  AdwTabOverview *tab_overview;
 
   GActionMap *tab_action_group;
 
   AdwTabPage *menu_page;
+  gboolean in_dispose;
 };
 
-G_DEFINE_TYPE (AdwTabViewDemoWindow, adw_tab_view_demo_window, ADW_TYPE_WINDOW)
-
-char **icon_names = NULL;
-gsize n_icon_names = 0;
-
-static void
-init_icon_names (GtkIconTheme *theme)
-{
-  if (icon_names)
-    return;
-
-  icon_names = gtk_icon_theme_get_icon_names (theme);
-  n_icon_names = g_strv_length (icon_names);
-}
-
-static GIcon *
-get_random_icon (AdwTabViewDemoWindow *self)
-{
-  GdkDisplay *display = gtk_widget_get_display (GTK_WIDGET (self));
-  GtkIconTheme *theme = gtk_icon_theme_get_for_display (display);
-  int index;
-
-  init_icon_names (theme);
-
-  index = g_random_int_range (0, n_icon_names);
-
-  return g_themed_icon_new (icon_names[index]);
-}
+G_DEFINE_FINAL_TYPE (AdwTabViewDemoWindow, adw_tab_view_demo_window, ADW_TYPE_WINDOW)
 
 static void
 window_new (GSimpleAction *action,
@@ -71,31 +48,47 @@ text_to_tooltip (GBinding     *binding,
 static AdwTabPage *
 add_page (AdwTabViewDemoWindow *self,
           AdwTabPage           *parent,
-          const char           *title,
-          GIcon                *icon)
+          AdwTabViewDemoPage   *content)
 {
-  GtkWidget *content;
   AdwTabPage *page;
-
-  content = g_object_new (GTK_TYPE_ENTRY,
-                          "text", title,
-                          "halign", GTK_ALIGN_CENTER,
-                          "valign", GTK_ALIGN_CENTER,
-                          NULL);
 
   page = adw_tab_view_add_page (self->view, GTK_WIDGET (content), parent);
 
-  g_object_bind_property (content, "text",
+  g_object_bind_property (content, "title",
                           page, "title",
-                          G_BINDING_SYNC_CREATE | G_BINDING_BIDIRECTIONAL);
-  g_object_bind_property_full (content, "text",
+                          G_BINDING_SYNC_CREATE);
+  g_object_bind_property_full (content, "title",
                                page, "tooltip",
                                G_BINDING_SYNC_CREATE,
                                text_to_tooltip, NULL,
                                NULL, NULL);
+  g_object_bind_property (content, "icon",
+                          page, "icon",
+                          G_BINDING_SYNC_CREATE);
 
-  adw_tab_page_set_icon (page, icon);
   adw_tab_page_set_indicator_activatable (page, TRUE);
+  adw_tab_page_set_thumbnail_xalign (page, 0.5);
+  adw_tab_page_set_thumbnail_yalign (page, 0.5);
+
+  return page;
+}
+
+static AdwTabPage *
+create_tab_cb (AdwTabViewDemoWindow *self)
+{
+  char *title;
+  AdwTabPage *page;
+  AdwTabViewDemoPage *content;
+  static int next_page = 1;
+
+  title = g_strdup_printf (_("Tab %d"), next_page);
+
+  content = adw_tab_view_demo_page_new (title);
+  page = add_page (self, NULL, content);
+
+  next_page++;
+
+  g_free (title);
 
   return page;
 }
@@ -106,25 +99,12 @@ tab_new (GSimpleAction *action,
          gpointer       user_data)
 {
   AdwTabViewDemoWindow *self = ADW_TAB_VIEW_DEMO_WINDOW (user_data);
-  char *title;
-  AdwTabPage *page;
-  GtkWidget *content;
-  GIcon *icon;
-  static int next_page = 1;
-
-  title = g_strdup_printf (_("Tab %d"), next_page);
-  icon = get_random_icon (self);
-
-  page = add_page (self, NULL, title, icon);
-  content = adw_tab_page_get_child (page);
+  AdwTabPage *page = create_tab_cb (self);
+  GtkWidget *content = adw_tab_page_get_child (page);
 
   adw_tab_view_set_selected_page (self->view, page);
 
   gtk_widget_grab_focus (content);
-
-  next_page++;
-
-  g_free (title);
 }
 
 static AdwTabPage *
@@ -297,16 +277,11 @@ tab_change_icon (GSimpleAction *action,
 {
   AdwTabViewDemoWindow *self = ADW_TAB_VIEW_DEMO_WINDOW (user_data);
   gboolean enable_icon = g_variant_get_boolean (parameter);
+  AdwTabPage *page = get_current_page (self);
+  GtkWidget *child = adw_tab_page_get_child (page);
 
-  if (enable_icon) {
-    GIcon *icon = get_random_icon (self);
-
-    adw_tab_page_set_icon (get_current_page (self), icon);
-
-    g_object_unref (icon);
-  } else {
-    adw_tab_page_set_icon (get_current_page (self), NULL);
-  }
+  adw_tab_view_demo_page_set_enable_icon (ADW_TAB_VIEW_DEMO_PAGE (child),
+                                          enable_icon);
 
   g_simple_action_set_state (action, g_variant_new_boolean (enable_icon));
 }
@@ -317,11 +292,10 @@ tab_refresh_icon (GSimpleAction *action,
                   gpointer       user_data)
 {
   AdwTabViewDemoWindow *self = ADW_TAB_VIEW_DEMO_WINDOW (user_data);
-  GIcon *icon = get_random_icon (self);
+  AdwTabPage *page = get_current_page (self);
+  GtkWidget *child = adw_tab_page_get_child (page);
 
-  adw_tab_page_set_icon (get_current_page (self), icon);
-
-  g_object_unref (icon);
+  adw_tab_view_demo_page_refresh_icon (ADW_TAB_VIEW_DEMO_PAGE (child));
 }
 
 static void
@@ -331,11 +305,12 @@ tab_duplicate (GSimpleAction *action,
 {
   AdwTabViewDemoWindow *self = ADW_TAB_VIEW_DEMO_WINDOW (user_data);
   AdwTabPage *parent = get_current_page (self);
+  GtkWidget *parent_content = adw_tab_page_get_child (parent);
+  AdwTabViewDemoPage *content;
   AdwTabPage *page;
 
-  page = add_page (self, parent,
-                   adw_tab_page_get_title (parent),
-                   adw_tab_page_get_icon (parent));
+  content = adw_tab_view_demo_page_new_duplicate (ADW_TAB_VIEW_DEMO_PAGE (parent_content));
+  page = add_page (self, parent, content);
 
   adw_tab_page_set_indicator_icon (page, adw_tab_page_get_indicator_icon (parent));
   adw_tab_page_set_indicator_tooltip (page, adw_tab_page_get_indicator_tooltip (parent));
@@ -401,7 +376,11 @@ static void
 page_detached_cb (AdwTabViewDemoWindow *self,
                   AdwTabPage           *page)
 {
-  if (!adw_tab_view_get_n_pages (self->view))
+  if (self->in_dispose)
+    return;
+
+  if (!adw_tab_view_get_n_pages (self->view) &&
+      !adw_tab_overview_get_open (self->tab_overview))
     gtk_window_close (GTK_WINDOW (self));
 }
 
@@ -502,6 +481,8 @@ adw_tab_view_demo_window_dispose (GObject *object)
 {
   AdwTabViewDemoWindow *self = ADW_TAB_VIEW_DEMO_WINDOW (object);
 
+  self->in_dispose = TRUE;
+
   g_clear_object (&self->tab_action_group);
 
   G_OBJECT_CLASS (adw_tab_view_demo_window_parent_class)->dispose (object);
@@ -518,21 +499,31 @@ adw_tab_view_demo_window_class_init (AdwTabViewDemoWindowClass *klass)
   gtk_widget_class_set_template_from_resource (widget_class, "/org/gnome/Adwaita1/Demo/ui/pages/tab-view/adw-tab-view-demo-window.ui");
   gtk_widget_class_bind_template_child (widget_class, AdwTabViewDemoWindow, view);
   gtk_widget_class_bind_template_child (widget_class, AdwTabViewDemoWindow, tab_bar);
+  gtk_widget_class_bind_template_child (widget_class, AdwTabViewDemoWindow, tab_overview);
   gtk_widget_class_bind_template_callback (widget_class, page_detached_cb);
   gtk_widget_class_bind_template_callback (widget_class, setup_menu_cb);
+  gtk_widget_class_bind_template_callback (widget_class, create_tab_cb);
   gtk_widget_class_bind_template_callback (widget_class, create_window_cb);
   gtk_widget_class_bind_template_callback (widget_class, indicator_activated_cb);
   gtk_widget_class_bind_template_callback (widget_class, extra_drag_drop_cb);
 
+#ifdef __APPLE__
+  gtk_widget_class_add_binding_action (widget_class, GDK_KEY_t, GDK_META_MASK, "win.tab-new", NULL);
+  gtk_widget_class_add_binding_action (widget_class, GDK_KEY_n, GDK_META_MASK, "win.window-new", NULL);
+  gtk_widget_class_add_binding_action (widget_class, GDK_KEY_w, GDK_META_MASK, "tab.close", NULL);
+#else
   gtk_widget_class_add_binding_action (widget_class, GDK_KEY_t, GDK_CONTROL_MASK, "win.tab-new", NULL);
   gtk_widget_class_add_binding_action (widget_class, GDK_KEY_n, GDK_CONTROL_MASK, "win.window-new", NULL);
   gtk_widget_class_add_binding_action (widget_class, GDK_KEY_w, GDK_CONTROL_MASK, "tab.close", NULL);
+#endif
 }
 
 static void
 adw_tab_view_demo_window_init (AdwTabViewDemoWindow *self)
 {
   GActionMap *action_map;
+  GdkDisplay *display;
+  AdwStyleManager *style_manager;
 
   gtk_widget_init_template (GTK_WIDGET (self));
 
@@ -558,6 +549,21 @@ adw_tab_view_demo_window_init (AdwTabViewDemoWindow *self)
   adw_tab_bar_setup_extra_drop_target (self->tab_bar,
                                        GDK_ACTION_COPY,
                                        (GType[1]) { G_TYPE_STRING }, 1);
+  adw_tab_overview_setup_extra_drop_target (self->tab_overview,
+                                            GDK_ACTION_COPY,
+                                            (GType[1]) { G_TYPE_STRING }, 1);
+
+  display = gtk_widget_get_display (GTK_WIDGET (self));
+  style_manager = adw_style_manager_get_for_display (display);
+
+  g_signal_connect_object (style_manager, "notify::dark",
+                           G_CALLBACK (adw_tab_view_invalidate_thumbnails),
+                           self->view,
+                           G_CONNECT_SWAPPED);
+  g_signal_connect_object (style_manager, "notify::high-contrast",
+                           G_CALLBACK (adw_tab_view_invalidate_thumbnails),
+                           self->view,
+                           G_CONNECT_SWAPPED);
 }
 
 AdwTabViewDemoWindow *
@@ -572,4 +578,6 @@ adw_tab_view_demo_window_prepopulate (AdwTabViewDemoWindow *self)
   tab_new (NULL, NULL, self);
   tab_new (NULL, NULL, self);
   tab_new (NULL, NULL, self);
+
+  adw_tab_view_invalidate_thumbnails (self->view);
 }

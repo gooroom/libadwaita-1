@@ -1,14 +1,14 @@
 /*
- * Copyright (C) 2019 Alexander Mikhaylenko <exalm7659@gmail.com>
+ * Copyright (C) 2019 Alice Mikhaylenko <alicem@gnome.org>
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
  */
 
 #include "config.h"
 
-#include "adw-gizmo-private.h"
-#include "adw-macros-private.h"
 #include "adw-shadow-helper-private.h"
+
+#include "adw-gizmo-private.h"
 
 struct _AdwShadowHelper
 {
@@ -20,6 +20,9 @@ struct _AdwShadowHelper
   GtkWidget *shadow;
   GtkWidget *border;
   GtkWidget *outline;
+
+  GtkPanDirection last_direction;
+  gboolean last_direction_valid;
 };
 
 G_DEFINE_FINAL_TYPE (AdwShadowHelper, adw_shadow_helper, G_TYPE_OBJECT);
@@ -46,10 +49,10 @@ adw_shadow_helper_constructed (GObject *object)
   self->outline = adw_gizmo_new_with_role ("outline", GTK_ACCESSIBLE_ROLE_PRESENTATION,
                                            NULL, NULL, NULL, NULL, NULL, NULL);
 
-  gtk_widget_set_child_visible (self->dimming, FALSE);
-  gtk_widget_set_child_visible (self->shadow, FALSE);
-  gtk_widget_set_child_visible (self->border, FALSE);
-  gtk_widget_set_child_visible (self->outline, FALSE);
+  gtk_widget_set_visible (self->dimming, FALSE);
+  gtk_widget_set_visible (self->shadow, FALSE);
+  gtk_widget_set_visible (self->border, FALSE);
+  gtk_widget_set_visible (self->outline, FALSE);
 
   gtk_widget_set_can_target (self->dimming, FALSE);
   gtk_widget_set_can_target (self->shadow, FALSE);
@@ -128,8 +131,6 @@ adw_shadow_helper_class_init (AdwShadowHelperClass *klass)
    * AdwShadowHelper:widget:
    *
    * The widget the shadow will be drawn for. Must not be `NULL`
-   *
-   * Since: 1.0
    */
   props[PROP_WIDGET] =
     g_param_spec_object ("widget", NULL, NULL,
@@ -150,8 +151,6 @@ adw_shadow_helper_init (AdwShadowHelper *self)
  * Creates a new `AdwShadowHelper`.
  *
  * Returns: the newly created `AdwShadowHelper`
- *
- * Since: 1.0
  */
 AdwShadowHelper *
 adw_shadow_helper_new (GtkWidget *widget)
@@ -166,6 +165,12 @@ set_style_classes (AdwShadowHelper *self,
                    GtkPanDirection  direction)
 {
   const char *classes[2];
+
+  /* Avoid needlessly reassigning the CSS classes. */
+  if (self->last_direction_valid && self->last_direction == direction)
+    return;
+  self->last_direction_valid = TRUE;
+  self->last_direction = direction;
 
   switch (direction) {
   case GTK_PAN_DIRECTION_LEFT:
@@ -226,10 +231,10 @@ adw_shadow_helper_size_allocate (AdwShadowHelper *self,
     g_assert_not_reached ();
   }
 
-  gtk_widget_set_child_visible (self->dimming, progress < 1);
-  gtk_widget_set_child_visible (self->shadow, progress < 1);
-  gtk_widget_set_child_visible (self->border, progress < 1);
-  gtk_widget_set_child_visible (self->outline, progress < 1);
+  gtk_widget_set_visible (self->dimming, progress < 1);
+  gtk_widget_set_visible (self->shadow, progress < 1);
+  gtk_widget_set_visible (self->border, progress < 1);
+  gtk_widget_set_visible (self->outline, progress < 1);
 
   gtk_widget_measure (self->shadow, orientation, -1, &shadow_size, NULL, NULL, NULL);
   gtk_widget_measure (self->border, orientation, -1, &border_size, NULL, NULL, NULL);

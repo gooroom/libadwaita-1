@@ -1,13 +1,11 @@
 #include "adw-demo-page-welcome.h"
 
-#include <glib/gi18n.h>
-
 struct _AdwDemoPageWelcome
 {
   AdwBin parent_instance;
 };
 
-G_DEFINE_TYPE (AdwDemoPageWelcome, adw_demo_page_welcome, ADW_TYPE_BIN)
+G_DEFINE_FINAL_TYPE (AdwDemoPageWelcome, adw_demo_page_welcome, ADW_TYPE_BIN)
 
 static void
 adw_demo_page_welcome_class_init (AdwDemoPageWelcomeClass *klass)

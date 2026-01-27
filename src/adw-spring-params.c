@@ -46,8 +46,6 @@ G_DEFINE_BOXED_TYPE (AdwSpringParams, adw_spring_params,
  * * Larger than 1: an overdamped spring.
  *
  * As such
- *
- * Since: 1.0
  */
 
 struct _AdwSpringParams
@@ -82,8 +80,6 @@ struct _AdwSpringParams
  * [ctor@SpringParams.new_full] allows to pass a raw damping value instead.
  *
  * Returns: (transfer full): the newly created spring parameters
- *
- * Since: 1.0
  */
 AdwSpringParams *
 adw_spring_params_new (double damping_ratio,
@@ -92,7 +88,7 @@ adw_spring_params_new (double damping_ratio,
 {
   double critical_damping, damping;
 
-  g_return_val_if_fail (damping_ratio >= 0.0, NULL);
+  g_return_val_if_fail (G_APPROX_VALUE (damping_ratio, 0.0, DBL_EPSILON) || damping_ratio > 0.0, NULL);
 
   critical_damping = 2 * sqrt (mass * stiffness);
   damping = damping_ratio * critical_damping;
@@ -112,8 +108,6 @@ adw_spring_params_new (double damping_ratio,
  * instead of @damping.
  *
  * Returns: (transfer full): the newly created spring parameters
- *
- * Since: 1.0
  */
 AdwSpringParams *
 adw_spring_params_new_full (double damping,
@@ -122,7 +116,7 @@ adw_spring_params_new_full (double damping,
 {
   AdwSpringParams *self;
 
-  g_return_val_if_fail (damping >= 0.0, NULL);
+  g_return_val_if_fail (G_APPROX_VALUE (damping, 0.0, DBL_EPSILON) || damping > 0.0, NULL);
   g_return_val_if_fail (mass > 0.0, NULL);
   g_return_val_if_fail (stiffness > 0.0, NULL);
 
@@ -143,9 +137,7 @@ adw_spring_params_new_full (double damping,
  *
  * Increases the reference count of @self.
  *
- * Return: (transfer full): @self
- *
- * Since: 1.0
+ * Returns: (transfer full): @self
  */
 AdwSpringParams *
 adw_spring_params_ref (AdwSpringParams *self)
@@ -164,8 +156,6 @@ adw_spring_params_ref (AdwSpringParams *self)
  * Decreases the reference count of @self.
  *
  * If the last reference is dropped, the structure is freed.
- *
- * Since: 1.0
  */
 void
 adw_spring_params_unref (AdwSpringParams *self)
@@ -183,8 +173,6 @@ adw_spring_params_unref (AdwSpringParams *self)
  * Gets the damping of @self.
  *
  * Returns: the damping
- *
- * Since: 1.0
  */
 double
 adw_spring_params_get_damping (AdwSpringParams *self)
@@ -201,8 +189,6 @@ adw_spring_params_get_damping (AdwSpringParams *self)
  * Gets the damping ratio of @self.
  *
  * Returns: the damping ratio
- *
- * Since: 1.0
  */
 double
 adw_spring_params_get_damping_ratio (AdwSpringParams *self)
@@ -223,8 +209,6 @@ adw_spring_params_get_damping_ratio (AdwSpringParams *self)
  * Gets the mass of @self.
  *
  * Returns: the mass
- *
- * Since: 1.0
  */
 double
 adw_spring_params_get_mass (AdwSpringParams *self)
@@ -241,8 +225,6 @@ adw_spring_params_get_mass (AdwSpringParams *self)
  * Gets the stiffness of @self.
  *
  * Returns: the stiffness
- *
- * Since: 1.0
  */
 double
 adw_spring_params_get_stiffness (AdwSpringParams *self)

@@ -8,7 +8,8 @@
 #include "adw-clamp-scrollable.h"
 
 #include "adw-clamp-layout.h"
-#include "adw-macros-private.h"
+#include "adw-enums.h"
+#include "adw-length-unit.h"
 #include "adw-widget-utils-private.h"
 
 /**
@@ -22,7 +23,7 @@
  * The primary use case for `AdwClampScrollable` is clamping
  * [class@Gtk.ListView].
  *
- * Since: 1.0
+ * See also: [class@ClampLayout].
  */
 
 enum {
@@ -30,6 +31,7 @@ enum {
   PROP_CHILD,
   PROP_MAXIMUM_SIZE,
   PROP_TIGHTENING_THRESHOLD,
+  PROP_UNIT,
 
   /* Overridden properties */
   PROP_ORIENTATION,
@@ -38,7 +40,7 @@ enum {
   PROP_HSCROLL_POLICY,
   PROP_VSCROLL_POLICY,
 
-  LAST_PROP = PROP_TIGHTENING_THRESHOLD + 1,
+  LAST_PROP = PROP_UNIT + 1,
 };
 
 struct _AdwClampScrollable
@@ -153,6 +155,9 @@ adw_clamp_scrollable_get_property (GObject    *object,
   case PROP_TIGHTENING_THRESHOLD:
     g_value_set_int (value, adw_clamp_scrollable_get_tightening_threshold (self));
     break;
+  case PROP_UNIT:
+    g_value_set_enum (value, adw_clamp_scrollable_get_unit (self));
+    break;
   case PROP_ORIENTATION:
     g_value_set_enum (value, self->orientation);
     break;
@@ -190,6 +195,9 @@ adw_clamp_scrollable_set_property (GObject      *object,
     break;
   case PROP_TIGHTENING_THRESHOLD:
     adw_clamp_scrollable_set_tightening_threshold (self, g_value_get_int (value));
+    break;
+  case PROP_UNIT:
+    adw_clamp_scrollable_set_unit (self, g_value_get_enum (value));
     break;
   case PROP_ORIENTATION:
     set_orientation (self, g_value_get_enum (value));
@@ -254,11 +262,9 @@ adw_clamp_scrollable_class_init (AdwClampScrollableClass *klass)
                                     "vscroll-policy");
 
   /**
-   * AdwClampScrollable:child: (attributes org.gtk.Property.get=adw_clamp_scrollable_get_child org.gtk.Property.set=adw_clamp_scrollable_set_child)
+   * AdwClampScrollable:child:
    *
    * The child widget of the `AdwClampScrollable`.
-   *
-   * Since: 1.0
    */
   props[PROP_CHILD] =
     g_param_spec_object ("child", NULL, NULL,
@@ -266,13 +272,11 @@ adw_clamp_scrollable_class_init (AdwClampScrollableClass *klass)
                          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
   /**
-   * AdwClampScrollable:maximum-size: (attributes org.gtk.Property.get=adw_clamp_scrollable_get_maximum_size org.gtk.Property.set=adw_clamp_scrollable_set_maximum_size)
+   * AdwClampScrollable:maximum-size:
    *
    * The maximum size allocated to the child.
    *
    * It is the width if the clamp is horizontal, or the height if it is vertical.
-   *
-   * Since: 1.0
    */
   props[PROP_MAXIMUM_SIZE] =
     g_param_spec_int ("maximum-size", NULL, NULL,
@@ -280,7 +284,7 @@ adw_clamp_scrollable_class_init (AdwClampScrollableClass *klass)
                       G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
   /**
-   * AdwClampScrollable:tightening-threshold: (attributes org.gtk.Property.get=adw_clamp_scrollable_get_tightening_threshold org.gtk.Property.set=adw_clamp_scrollable_set_tightening_threshold)
+   * AdwClampScrollable:tightening-threshold:
    *
    * The size above which the child is clamped.
    *
@@ -296,13 +300,26 @@ adw_clamp_scrollable_class_init (AdwClampScrollableClass *klass)
    *
    * Effectively, tightening the grip on the child before it reaches its maximum
    * size makes transitions to and from the maximum size smoother when resizing.
-   *
-   * Since: 1.0
    */
   props[PROP_TIGHTENING_THRESHOLD] =
     g_param_spec_int ("tightening-threshold", NULL, NULL,
                       0, G_MAXINT, 400,
                       G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
+
+  /**
+   * AdwClampScrollable:unit:
+   *
+   * The length unit for maximum size and tightening threshold.
+   *
+   * Allows the sizes to vary depending on the text scale factor.
+   *
+   * Since: 1.4
+   */
+  props[PROP_UNIT] =
+    g_param_spec_enum ("unit", NULL, NULL,
+                       ADW_TYPE_LENGTH_UNIT,
+                       ADW_LENGTH_UNIT_SP,
+                       G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
   g_object_class_install_properties (object_class, LAST_PROP, props);
 
@@ -341,8 +358,6 @@ adw_clamp_scrollable_buildable_init (GtkBuildableIface *iface)
  * Creates a new `AdwClampScrollable`.
  *
  * Returns: the newly created `AdwClampScrollable`
- *
- * Since: 1.0
  */
 GtkWidget *
 adw_clamp_scrollable_new (void)
@@ -351,14 +366,12 @@ adw_clamp_scrollable_new (void)
 }
 
 /**
- * adw_clamp_scrollable_get_child: (attributes org.gtk.Method.get_property=child)
+ * adw_clamp_scrollable_get_child:
  * @self: a clamp scrollable
  *
  * Gets the child widget of @self.
  *
  * Returns: (nullable) (transfer none): the child widget of @self
- *
- * Since: 1.0
  */
 GtkWidget *
 adw_clamp_scrollable_get_child (AdwClampScrollable *self)
@@ -369,13 +382,11 @@ adw_clamp_scrollable_get_child (AdwClampScrollable *self)
 }
 
 /**
- * adw_clamp_scrollable_set_child: (attributes org.gtk.Method.set_property=child)
+ * adw_clamp_scrollable_set_child:
  * @self: a clamp scrollable
  * @child: (nullable): the child widget
  *
  * Sets the child widget of @self.
- *
- * Since: 1.0
  */
 void
 adw_clamp_scrollable_set_child (AdwClampScrollable *self,
@@ -386,6 +397,9 @@ adw_clamp_scrollable_set_child (AdwClampScrollable *self,
 
   if (self->child == child)
     return;
+
+  if (child)
+    g_return_if_fail (gtk_widget_get_parent (child) == NULL);
 
   if (self->child) {
     g_clear_pointer (&self->hadjustment_binding, g_binding_unbind);
@@ -423,14 +437,12 @@ adw_clamp_scrollable_set_child (AdwClampScrollable *self,
 }
 
 /**
- * adw_clamp_scrollable_get_maximum_size: (attributes org.gtk.Method.get_property=maximum-size)
+ * adw_clamp_scrollable_get_maximum_size:
  * @self: a clamp scrollable
  *
  * Gets the maximum size allocated to the child.
  *
  * Returns: the maximum size to allocate to the child
- *
- * Since: 1.0
  */
 int
 adw_clamp_scrollable_get_maximum_size (AdwClampScrollable *self)
@@ -445,15 +457,13 @@ adw_clamp_scrollable_get_maximum_size (AdwClampScrollable *self)
 }
 
 /**
- * adw_clamp_scrollable_set_maximum_size: (attributes org.gtk.Method.set_property=maximum-size)
+ * adw_clamp_scrollable_set_maximum_size:
  * @self: a clamp scrollable
  * @maximum_size: the maximum size
  *
  * Sets the maximum size allocated to the child.
  *
  * It is the width if the clamp is horizontal, or the height if it is vertical.
- *
- * Since: 1.0
  */
 void
 adw_clamp_scrollable_set_maximum_size (AdwClampScrollable *self,
@@ -474,14 +484,12 @@ adw_clamp_scrollable_set_maximum_size (AdwClampScrollable *self,
 }
 
 /**
- * adw_clamp_scrollable_get_tightening_threshold: (attributes org.gtk.Method.get_property=tightening-threshold)
+ * adw_clamp_scrollable_get_tightening_threshold:
  * @self: a clamp scrollable
  *
  * Gets the size above which the child is clamped.
  *
  * Returns: the size above which the child is clamped
- *
- * Since: 1.0
  */
 int
 adw_clamp_scrollable_get_tightening_threshold (AdwClampScrollable *self)
@@ -496,7 +504,7 @@ adw_clamp_scrollable_get_tightening_threshold (AdwClampScrollable *self)
 }
 
 /**
- * adw_clamp_scrollable_set_tightening_threshold: (attributes org.gtk.Method.set_property=tightening-threshold)
+ * adw_clamp_scrollable_set_tightening_threshold:
  * @self: a clamp scrollable
  * @tightening_threshold: the tightening threshold
  *
@@ -514,8 +522,6 @@ adw_clamp_scrollable_get_tightening_threshold (AdwClampScrollable *self)
  *
  * Effectively, tightening the grip on the child before it reaches its maximum
  * size makes transitions to and from the maximum size smoother when resizing.
- *
- * Since: 1.0
  */
 void
 adw_clamp_scrollable_set_tightening_threshold (AdwClampScrollable *self,
@@ -533,4 +539,57 @@ adw_clamp_scrollable_set_tightening_threshold (AdwClampScrollable *self,
   adw_clamp_layout_set_tightening_threshold (layout, tightening_threshold);
 
   g_object_notify_by_pspec (G_OBJECT (self), props[PROP_TIGHTENING_THRESHOLD]);
+}
+
+/**
+ * adw_clamp_scrollable_get_unit:
+ * @self: a clamp scrollable
+ *
+ * Gets the length unit for maximum size and tightening threshold.
+ *
+ * Returns: the length unit
+ *
+ * Since: 1.4
+ */
+AdwLengthUnit
+adw_clamp_scrollable_get_unit (AdwClampScrollable *self)
+{
+  AdwClampLayout *layout;
+
+  g_return_val_if_fail (ADW_IS_CLAMP_SCROLLABLE (self), ADW_LENGTH_UNIT_PX);
+
+  layout = ADW_CLAMP_LAYOUT (gtk_widget_get_layout_manager (GTK_WIDGET (self)));
+
+  return adw_clamp_layout_get_unit (layout);
+}
+
+/**
+ * adw_clamp_scrollable_set_unit:
+ * @self: a clamp
+ * @unit: the length unit
+ *
+ * Sets the length unit for maximum size and tightening threshold.
+ *
+ * Allows the sizes to vary depending on the text scale factor.
+ *
+ * Since: 1.4
+ */
+void
+adw_clamp_scrollable_set_unit (AdwClampScrollable *self,
+                               AdwLengthUnit       unit)
+{
+  AdwClampLayout *layout;
+
+  g_return_if_fail (ADW_IS_CLAMP_SCROLLABLE (self));
+  g_return_if_fail (unit >= ADW_LENGTH_UNIT_PX);
+  g_return_if_fail (unit <= ADW_LENGTH_UNIT_SP);
+
+  layout = ADW_CLAMP_LAYOUT (gtk_widget_get_layout_manager (GTK_WIDGET (self)));
+
+  if (adw_clamp_layout_get_unit (layout) == unit)
+    return;
+
+  adw_clamp_layout_set_unit (layout, unit);
+
+  g_object_notify_by_pspec (G_OBJECT (self), props[PROP_UNIT]);
 }

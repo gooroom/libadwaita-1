@@ -30,6 +30,7 @@
               </closure>
             </binding>
             <property name="valign">center</property>
+            <property name="accessible-role">presentation</property>
             <style>
               <class name="icon"/>
             </style>
@@ -74,6 +75,7 @@
                 </binding>
                 <property name="ellipsize">none</property>
                 <property name="lines">0</property>
+                <property name="selectable" bind-source="AdwActionRow" bind-property="subtitle-selectable" bind-flags="sync-create"/>
                 <property name="wrap">True</property>
                 <property name="wrap-mode">word-char</property>
                 <property name="xalign">0</property>
@@ -95,5 +97,10 @@
         </child>
       </object>
     </property>
+    <child>
+      <object class="GtkGestureClick">
+        <signal name="pressed" handler="pressed_cb" swapped="yes"/>
+      </object>
+    </child>
   </template>
 </interface>

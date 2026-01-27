@@ -2,22 +2,21 @@
 <interface>
   <requires lib="gtk" version="4.0"/>
   <requires lib="libadwaita" version="1.0"/>
-  <object class="GtkWindow" id="widget">
+  <object class="AdwWindow" id="widget">
     <property name="title">View Switcher Bar</property>
     <property name="default-height">150</property>
-    <property name="titlebar">
-      <object class="GtkHeaderBar"/>
-    </property>
-    <property name="child">
-      <object class="GtkBox">
-        <property name="orientation">vertical</property>
-        <child>
+    <property name="height-request">-1</property>
+    <property name="content">
+      <object class="AdwToolbarView">
+        <child type="top">
+          <object class="AdwHeaderBar"/>
+        </child>
+        <property name="content">
           <object class="AdwViewStack" id="stack">
-            <property name="vexpand">True</property>
             <child>
               <object class="AdwViewStackPage">
                 <property name="title">Page 1</property>
-                <property name="icon-name">preferences-other-symbolic</property>
+                <property name="icon-name">applications-system-symbolic</property>
                 <property name="child">
                   <object class="AdwBin"/>
                 </property>
@@ -26,7 +25,7 @@
             <child>
               <object class="AdwViewStackPage">
                 <property name="title">Page 2</property>
-                <property name="icon-name">preferences-other-symbolic</property>
+                <property name="icon-name">applications-system-symbolic</property>
                 <property name="child">
                   <object class="AdwBin"/>
                 </property>
@@ -35,15 +34,17 @@
             <child>
               <object class="AdwViewStackPage">
                 <property name="title">Page 3</property>
-                <property name="icon-name">preferences-other-symbolic</property>
+                <property name="icon-name">applications-system-symbolic</property>
+                <property name="needs-attention">True</property>
+                <property name="badge-number">3</property>
                 <property name="child">
                   <object class="AdwBin"/>
                 </property>
               </object>
             </child>
           </object>
-        </child>
-        <child>
+        </property>
+        <child type="bottom">
           <object class="AdwViewSwitcherBar">
             <property name="stack">stack</property>
             <property name="reveal">True</property>

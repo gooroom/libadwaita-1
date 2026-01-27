@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
  *
- * Author: Alexander Mikhaylenko <alexander.mikhaylenko@puri.sm>
+ * Author: Alice Mikhaylenko <alice.mikhaylenko@puri.sm>
  */
 
 #pragma once
@@ -16,6 +16,8 @@
 
 G_BEGIN_DECLS
 
+GdkPaintable *adw_tab_page_get_paintable (AdwTabPage *self);
+
 gboolean adw_tab_view_select_first_page (AdwTabView *self);
 gboolean adw_tab_view_select_last_page  (AdwTabView *self);
 
@@ -26,5 +28,8 @@ void adw_tab_view_attach_page (AdwTabView *self,
                                int         position);
 
 AdwTabView *adw_tab_view_create_window (AdwTabView *self) G_GNUC_WARN_UNUSED_RESULT;
+
+void adw_tab_view_open_overview (AdwTabView *self);
+void adw_tab_view_close_overview (AdwTabView *self);
 
 G_END_DECLS

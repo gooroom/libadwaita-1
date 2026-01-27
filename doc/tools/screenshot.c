@@ -13,12 +13,48 @@ static GOptionEntry entries[] =
   { NULL }
 };
 
+static void
+pixbuf_texture_unref_cb (guchar   *pixels,
+                         gpointer  bytes)
+{
+  g_bytes_unref (bytes);
+}
+
+static GdkPixbuf *
+create_pixbuf_from_texture (GdkTexture *texture)
+{
+  GdkTextureDownloader *downloader;
+  GBytes *bytes;
+  gsize stride;
+
+  downloader = gdk_texture_downloader_new (texture);
+  gdk_texture_downloader_set_format (downloader, GDK_MEMORY_R8G8B8A8);
+  bytes = gdk_texture_downloader_download_bytes (downloader, &stride);
+
+  gdk_texture_downloader_free (downloader);
+
+  return gdk_pixbuf_new_from_data (g_bytes_get_data (bytes, NULL),
+                                   GDK_COLORSPACE_RGB,
+                                   TRUE,
+                                   8,
+                                   gdk_texture_get_width (texture),
+                                   gdk_texture_get_height (texture),
+                                   stride,
+                                   pixbuf_texture_unref_cb,
+                                   bytes);
+}
+
 typedef struct {
+  GtkWidget *window;
   GtkWidget *widget;
   GtkWidget *hover_widget;
+  GtkWidget *hscroll_widget;
+  GtkWidget *vscroll_widget;
+  GtkWidget *nav_view_child_widget;
   GdkPaintable *paintable;
   char *name;
   GtkCssProvider *provider;
+  GtkCssProvider *provider_dark;
 } ScreenshotData;
 
 static void
@@ -27,11 +63,103 @@ screenshot_data_free (ScreenshotData *data)
   g_object_unref (data->paintable);
   gtk_window_destroy (GTK_WINDOW (gtk_widget_get_root (data->widget)));
   g_object_unref (data->provider);
+  g_clear_object (&data->provider_dark);
   g_free (data->name);
   g_free (data);
 }
 
-static gboolean
+static GdkPixbuf *
+crop_alpha (GdkPixbuf *pixbuf)
+{
+  const guint8 *pixels = gdk_pixbuf_read_pixels (pixbuf);
+  int row, col, width, height, stride, top, bottom, left, right;
+
+  if (!gdk_pixbuf_get_has_alpha (pixbuf))
+    return g_object_ref (pixbuf);
+
+  if (gdk_pixbuf_get_n_channels (pixbuf) != 4)
+    return g_object_ref (pixbuf);
+
+  width = gdk_pixbuf_get_width (pixbuf);
+  height = gdk_pixbuf_get_height (pixbuf);
+  stride = gdk_pixbuf_get_rowstride (pixbuf);
+
+  left = top = 0;
+  right = width;
+  bottom = height;
+
+  /* Left */
+  for (col = 0; col < width; col++) {
+    gboolean empty = TRUE;
+
+    for (row = 0; row < height; row++) {
+      if (pixels[row * stride + col * 4 + 3] != 0) {
+        empty = FALSE;
+        break;
+      }
+    }
+
+    if (!empty) {
+      left = col;
+      break;
+    }
+  }
+
+  /* Right */
+  for (col = width - 1; col > left; col--) {
+    gboolean empty = TRUE;
+
+    for (row = 0; row < height; row++) {
+      if (pixels[row * stride + col * 4 + 3] != 0) {
+        empty = FALSE;
+        break;
+      }
+    }
+
+    if (!empty) {
+      right = col + 1;
+      break;
+    }
+  }
+
+  /* Top */
+  for (row = 0; row < height; row++) {
+    gboolean empty = TRUE;
+
+    for (col = 0; col < width; col++) {
+      if (pixels[row * stride + col * 4 + 3] != 0) {
+        empty = FALSE;
+        break;
+      }
+    }
+
+    if (!empty) {
+      top = row;
+      break;
+    }
+  }
+
+  /* Bottom */
+  for (row = height - 1; row > top; row--) {
+    gboolean empty = TRUE;
+
+    for (col = 0; col < width; col++) {
+      if (pixels[row * stride + col * 4 + 3] != 0) {
+        empty = FALSE;
+        break;
+      }
+    }
+
+    if (!empty) {
+      bottom = row + 1;
+      break;
+    }
+  }
+
+  return gdk_pixbuf_new_subpixbuf (pixbuf, left, top, right - left, bottom - top);
+}
+
+static void
 draw_paintable_cb (ScreenshotData *data)
 {
   GtkSnapshot *snapshot;
@@ -39,12 +167,11 @@ draw_paintable_cb (ScreenshotData *data)
   GdkTexture *texture;
   GskRenderNode *node;
   int x, y, width, height;
-  int widget_width, widget_height;
-
-  widget_width = gtk_widget_get_allocated_width (data->widget);
-  widget_height = gtk_widget_get_allocated_height (data->widget);
+  graphene_rect_t bounds;
 
   if (GTK_IS_NATIVE (data->widget)) {
+    g_assert (gtk_widget_compute_bounds (data->widget, data->widget, &bounds));
+
     GdkSurface *surface;
     double transform_x, transform_y;
 
@@ -56,21 +183,22 @@ draw_paintable_cb (ScreenshotData *data)
     width = gdk_surface_get_width (surface);
     height = gdk_surface_get_height (surface);
   } else {
+    g_assert (gtk_widget_compute_bounds (data->widget, data->window, &bounds));
+
     x = gtk_widget_get_margin_start (data->widget);
     y = gtk_widget_get_margin_top (data->widget);
-    width = widget_width + x + gtk_widget_get_margin_end (data->widget);
-    height = widget_height + y + gtk_widget_get_margin_bottom (data->widget);
+    width = bounds.size.width + x + gtk_widget_get_margin_end (data->widget);
+    height = bounds.size.height + y + gtk_widget_get_margin_bottom (data->widget);
   }
-
 
   snapshot = gtk_snapshot_new ();
 
   gtk_snapshot_translate (snapshot, &GRAPHENE_POINT_INIT (x, y));
-  gdk_paintable_snapshot (data->paintable, snapshot, widget_width, widget_height);
+  gdk_paintable_snapshot (data->paintable, snapshot, bounds.size.width, bounds.size.height);
   node = gtk_snapshot_free_to_node (snapshot);
 
   if (gsk_render_node_get_node_type (node) == GSK_CLIP_NODE &&
-      (x > 0 || y > 0 || widget_width < width || widget_height < height)) {
+      (x > 0 || y > 0 || bounds.size.width < width || bounds.size.height < height)) {
     GskRenderNode *original_node = g_steal_pointer (&node);
 
     node = gsk_render_node_ref (gsk_clip_node_get_child (original_node));
@@ -83,7 +211,17 @@ draw_paintable_cb (ScreenshotData *data)
   texture = gsk_renderer_render_texture (renderer, node,
                                          &GRAPHENE_RECT_INIT (0, 0, width, height));
 
-  gdk_texture_save_to_png (texture, data->name);
+  if (GTK_IS_NATIVE (data->widget)) {
+    GdkPixbuf *pixbuf = create_pixbuf_from_texture (texture);
+    GdkPixbuf *cropped_pixbuf = crop_alpha (pixbuf);
+
+    gdk_pixbuf_save (cropped_pixbuf, data->name, "png", NULL, NULL);
+
+    g_object_unref (cropped_pixbuf);
+    g_object_unref (pixbuf);
+  } else {
+    gdk_texture_save_to_png (texture, data->name);
+  }
 
   screenshot_data_free (data);
 
@@ -91,8 +229,6 @@ draw_paintable_cb (ScreenshotData *data)
 
   g_object_unref (texture);
   gsk_render_node_unref (node);
-
-  return G_SOURCE_REMOVE;
 }
 
 static void
@@ -103,7 +239,7 @@ draw_paintable (ScreenshotData *data)
                                         data);
 
   /* Handle the case where something immediately invalidates allocation. */
-  g_timeout_add (50, G_SOURCE_FUNC (draw_paintable_cb), data);
+  g_timeout_add_once (100, (GSourceOnceFunc) draw_paintable_cb, data);
 }
 
 static GtkCssProvider *
@@ -122,7 +258,7 @@ load_css (const char *name)
   return provider;
 }
 
-static gboolean
+static void
 take_screenshot_cb (ScreenshotData *data)
 {
   if (GTK_IS_POPOVER (data->widget))
@@ -135,12 +271,55 @@ take_screenshot_cb (ScreenshotData *data)
                                 flags | GTK_STATE_FLAG_PRELIGHT, FALSE);
   }
 
+  if (data->hscroll_widget) {
+    GtkAdjustment *adj;
+
+    g_assert (GTK_IS_SCROLLED_WINDOW (data->hscroll_widget));
+
+    adj = gtk_scrolled_window_get_hadjustment (GTK_SCROLLED_WINDOW (data->hscroll_widget));
+
+    gtk_adjustment_set_value (adj,
+                              (gtk_adjustment_get_lower (adj) +
+                               gtk_adjustment_get_upper (adj) -
+                               gtk_adjustment_get_page_size (adj)) / 2);
+  }
+
+  if (data->vscroll_widget) {
+    GtkAdjustment *adj;
+
+    g_assert (GTK_IS_SCROLLED_WINDOW (data->vscroll_widget));
+
+    adj = gtk_scrolled_window_get_vadjustment (GTK_SCROLLED_WINDOW (data->vscroll_widget));
+
+    gtk_adjustment_set_value (adj,
+                              (gtk_adjustment_get_lower (adj) +
+                               gtk_adjustment_get_upper (adj) -
+                               gtk_adjustment_get_page_size (adj)) / 2);
+  }
+
+  if (data->nav_view_child_widget) {
+    AdwNavigationPage *visible_page;
+    GtkWidget *view;
+
+    g_assert (ADW_IS_NAVIGATION_PAGE (data->nav_view_child_widget));
+
+    view = gtk_widget_get_parent (data->nav_view_child_widget);
+
+    g_assert (ADW_IS_NAVIGATION_VIEW (view));
+
+    visible_page = adw_navigation_view_get_visible_page (ADW_NAVIGATION_VIEW (view));
+
+    adw_navigation_view_replace (ADW_NAVIGATION_VIEW (view),
+                                 (AdwNavigationPage *[2]) {
+                                   visible_page,
+                                   ADW_NAVIGATION_PAGE (data->nav_view_child_widget)
+                                 }, 2);
+  }
+
   g_signal_connect_swapped (data->paintable, "invalidate-contents",
                             G_CALLBACK (draw_paintable), data);
 
   gtk_widget_queue_draw (data->widget);
-
-  return G_SOURCE_REMOVE;
 }
 
 static void
@@ -158,6 +337,9 @@ take_screenshot (const char *name,
   ScreenshotData *data;
   GObject *widget;
   GObject *hover_widget;
+  GObject *hscroll_widget;
+  GObject *vscroll_widget;
+  GObject *nav_view_child_widget;
   GtkWidget *window;
   gboolean wait = FALSE;
 
@@ -184,11 +366,13 @@ take_screenshot (const char *name,
   builder = gtk_builder_new_from_file (input_path);
   widget = gtk_builder_get_object (builder, "widget");
   hover_widget = gtk_builder_get_object (builder, "hover");
+  hscroll_widget = gtk_builder_get_object (builder, "hscroll");
+  vscroll_widget = gtk_builder_get_object (builder, "vscroll");
+  nav_view_child_widget = gtk_builder_get_object (builder, "nav-page");
 
   g_assert (GTK_IS_WIDGET (widget));
 
   data = g_new0 (ScreenshotData, 1);
-  data->widget = GTK_WIDGET (widget);
 
   if (GTK_IS_WINDOW (widget)) {
     window = GTK_WIDGET (widget);
@@ -205,27 +389,52 @@ take_screenshot (const char *name,
     gtk_window_set_child (GTK_WINDOW (window), button);
 
     wait = TRUE;
+  } else if (ADW_IS_DIALOG (widget)) {
+    window = GTK_WIDGET (gtk_builder_get_object (builder, "window"));
+    adw_dialog_present (ADW_DIALOG (widget), window);
+    widget = G_OBJECT (window);
   } else if (gtk_widget_get_root (GTK_WIDGET (widget))) {
     window = GTK_WIDGET (gtk_widget_get_root (GTK_WIDGET (widget)));
   } else {
     window = gtk_window_new ();
     gtk_window_set_decorated (GTK_WINDOW (window), FALSE);
-    gtk_window_set_child (GTK_WINDOW (window), data->widget);
+    gtk_window_set_child (GTK_WINDOW (window), GTK_WIDGET (widget));
   }
 
+  data->widget = GTK_WIDGET (widget);
+  data->window = window;
   data->paintable = gtk_widget_paintable_new (data->widget);
   data->name = g_file_get_path (output_file);
   data->provider = load_css ("style");
+
+  gtk_widget_set_can_target (data->window, FALSE);
+
+  if (dark)
+    data->provider_dark = load_css ("style-dark");
+
   if (hover_widget)
     data->hover_widget = GTK_WIDGET (hover_widget);
 
+  if (hscroll_widget)
+    data->hscroll_widget = GTK_WIDGET (hscroll_widget);
+
+  if (vscroll_widget)
+    data->vscroll_widget = GTK_WIDGET (vscroll_widget);
+
+  if (nav_view_child_widget)
+    data->nav_view_child_widget = GTK_WIDGET (nav_view_child_widget);
+
   if (wait)
-    g_timeout_add_seconds (1, G_SOURCE_FUNC (take_screenshot_cb), data);
+    g_timeout_add_once (1000, (GSourceOnceFunc) take_screenshot_cb, data);
 
   gtk_window_present (GTK_WINDOW (window));
 
-  if (!wait)
-    take_screenshot_cb (data);
+  if (!wait) {
+    if (hscroll_widget || vscroll_widget)
+      g_idle_add_once ((GSourceOnceFunc) take_screenshot_cb, data);
+    else
+      take_screenshot_cb (data);
+  }
 
   g_main_loop_run (loop);
   g_main_loop_unref (loop);
@@ -259,10 +468,11 @@ init_libadwaita (void)
 
   g_object_set (gtk_settings_get_default (),
                 "gtk-enable-animations", FALSE,
-                "gtk-font-name", "Cantarell 11",
+                "gtk-font-name", "Adwaita Sans 11",
                 "gtk-icon-theme-name", "Adwaita",
                 "gtk-decoration-layout", ":close",
                 "gtk-hint-font-metrics", TRUE,
+                "gtk-font-rendering", GTK_FONT_RENDERING_MANUAL,
                 NULL);
 }
 
@@ -354,7 +564,7 @@ run_screenshot (GFile *input_dir,
     char *shortname = l->data;
 
     process_image (shortname, input_dir, output_dir);
-	g_free (shortname);
+    g_free (shortname);
   }
 
   g_list_free (children);
@@ -386,6 +596,10 @@ main (int    argc,
   GFile *output_dir = NULL;
   GError *error = NULL;
   gboolean result;
+
+  g_setenv ("ADW_DEBUG_COLOR_SCHEME", "default", TRUE);
+  g_setenv ("ADW_DEBUG_HIGH_CONTRAST", "0", TRUE);
+  g_setenv ("ADW_DEBUG_ACCENT_COLOR", "blue", TRUE);
 
   g_option_context_add_main_entries (context, entries, NULL);
   if (!g_option_context_parse (context, &argc, &argv, NULL)) {

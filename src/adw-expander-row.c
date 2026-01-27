@@ -8,7 +8,6 @@
 #include "adw-expander-row.h"
 
 #include "adw-action-row.h"
-#include "adw-macros-private.h"
 #include "adw-widget-utils-private.h"
 
 /**
@@ -28,7 +27,7 @@
  * ## AdwExpanderRow as GtkBuildable
  *
  * The `AdwExpanderRow` implementation of the [iface@Gtk.Buildable] interface
- * supports adding a child as an action widget by specifying “action” as the
+ * supports adding a child as an suffix widget by specifying “suffix” as the
  * “type” attribute of a <child> element.
  *
  * It also supports adding it as a prefix widget by specifying “prefix” as the
@@ -43,13 +42,20 @@
  * `list.nested` for the list it can expand, and `image.expander-row-arrow` for
  * its arrow.
  *
- * Since: 1.0
+ * ## Style classes
+ *
+ * `AdwExpanderRow` can use the [`.`](style-classes.html#property-rows)
+ * style class to emphasize the row subtitle instead of the row title, which is
+ * useful for displaying read-only properties.
+ *
+ * When used together with the `.monospace` style class, only the subtitle
+ * becomes monospace, not the title or any extra widgets.
  */
 
 typedef struct
 {
   GtkBox *box;
-  GtkBox *actions;
+  GtkBox *suffixes;
   GtkBox *prefixes;
   GtkListBox *list;
   AdwActionRow *action_row;
@@ -77,6 +83,8 @@ enum {
   PROP_EXPANDED,
   PROP_ENABLE_EXPANSION,
   PROP_SHOW_ENABLE_SWITCH,
+  PROP_TITLE_LINES,
+  PROP_SUBTITLE_LINES,
   LAST_PROP,
 };
 
@@ -106,6 +114,15 @@ keynav_failed_cb (AdwExpanderRow   *self,
                                  GTK_DIR_TAB_BACKWARD : GTK_DIR_TAB_FORWARD);
 }
 
+static gboolean
+adw_expander_row_grab_focus (GtkWidget *widget)
+{
+  AdwExpanderRow *self = ADW_EXPANDER_ROW (widget);
+  AdwExpanderRowPrivate *priv = adw_expander_row_get_instance_private (self);
+
+  return gtk_widget_grab_focus (GTK_WIDGET (priv->action_row));
+}
+
 static void
 adw_expander_row_get_property (GObject    *object,
                                guint       prop_id,
@@ -129,6 +146,12 @@ adw_expander_row_get_property (GObject    *object,
     break;
   case PROP_SHOW_ENABLE_SWITCH:
     g_value_set_boolean (value, adw_expander_row_get_show_enable_switch (self));
+    break;
+  case PROP_TITLE_LINES:
+    g_value_set_int (value, adw_expander_row_get_title_lines (self));
+    break;
+  case PROP_SUBTITLE_LINES:
+    g_value_set_int (value, adw_expander_row_get_subtitle_lines (self));
     break;
   default:
     G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -159,6 +182,12 @@ adw_expander_row_set_property (GObject      *object,
   case PROP_SHOW_ENABLE_SWITCH:
     adw_expander_row_set_show_enable_switch (self, g_value_get_boolean (value));
     break;
+  case PROP_TITLE_LINES:
+    adw_expander_row_set_title_lines (self, g_value_get_int (value));
+    break;
+  case PROP_SUBTITLE_LINES:
+    adw_expander_row_set_subtitle_lines (self, g_value_get_int (value));
+    break;
   default:
     G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
   }
@@ -174,17 +203,15 @@ adw_expander_row_class_init (AdwExpanderRowClass *klass)
   object_class->set_property = adw_expander_row_set_property;
 
   widget_class->focus = adw_widget_focus_child;
-  widget_class->grab_focus = adw_widget_grab_focus_child;
+  widget_class->grab_focus = adw_expander_row_grab_focus;
 
   /**
-   * AdwExpanderRow:subtitle: (attributes org.gtk.Property.get=adw_expander_row_get_subtitle org.gtk.Property.set=adw_expander_row_set_subtitle)
+   * AdwExpanderRow:subtitle:
    *
    * The subtitle for this row.
    *
    * The subtitle is interpreted as Pango markup unless
    * [property@PreferencesRow:use-markup] is set to `FALSE`.
-   *
-   * Since: 1.0
    */
   props[PROP_SUBTITLE] =
     g_param_spec_string ("subtitle", NULL, NULL,
@@ -192,11 +219,11 @@ adw_expander_row_class_init (AdwExpanderRowClass *klass)
                          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
   /**
-   * AdwExpanderRow:icon-name: (attributes org.gtk.Property.get=adw_expander_row_get_icon_name org.gtk.Property.set=adw_expander_row_set_icon_name)
+   * AdwExpanderRow:icon-name:
    *
    * The icon name for this row.
    *
-   * Since: 1.0
+   * Deprecated: 1.3: Use [method@ExpanderRow.add_prefix] to add an icon.
    */
   props[PROP_ICON_NAME] =
     g_param_spec_string ("icon-name", NULL, NULL,
@@ -204,11 +231,9 @@ adw_expander_row_class_init (AdwExpanderRowClass *klass)
                          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
   /**
-   * AdwExpanderRow:expanded: (attributes org.gtk.Property.get=adw_expander_row_get_expanded org.gtk.Property.set=adw_expander_row_set_expanded)
+   * AdwExpanderRow:expanded:
    *
    * Whether the row is expanded.
-   *
-   * Since: 1.0
    */
   props[PROP_EXPANDED] =
     g_param_spec_boolean ("expanded", NULL, NULL,
@@ -216,11 +241,9 @@ adw_expander_row_class_init (AdwExpanderRowClass *klass)
                           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
   /**
-   * AdwExpanderRow:enable-expansion: (attributes org.gtk.Property.get=adw_expander_row_get_enable_expansion org.gtk.Property.set=adw_expander_row_set_enable_expansion)
+   * AdwExpanderRow:enable-expansion:
    *
    * Whether expansion is enabled.
-   *
-   * Since: 1.0
    */
   props[PROP_ENABLE_EXPANSION] =
     g_param_spec_boolean ("enable-expansion", NULL, NULL,
@@ -228,16 +251,45 @@ adw_expander_row_class_init (AdwExpanderRowClass *klass)
                           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
   /**
-   * AdwExpanderRow:show-enable-switch: (attributes org.gtk.Property.get=adw_expander_row_get_show_enable_switch org.gtk.Property.set=adw_expander_row_set_show_enable_switch)
+   * AdwExpanderRow:show-enable-switch:
    *
    * Whether the switch enabling the expansion is visible.
-   *
-   * Since: 1.0
    */
   props[PROP_SHOW_ENABLE_SWITCH] =
     g_param_spec_boolean ("show-enable-switch", NULL, NULL,
                           FALSE,
                           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
+
+  /**
+   * AdwExpanderRow:title-lines:
+   *
+   * The number of lines at the end of which the title label will be ellipsized.
+   *
+   * If the value is 0, the number of lines won't be limited.
+   *
+   * Since: 1.3
+   */
+  props[PROP_TITLE_LINES] =
+    g_param_spec_int ("title-lines", NULL, NULL,
+                      0, G_MAXINT,
+                      0,
+                      G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
+
+  /**
+   * AdwExpanderRow:subtitle-lines:
+   *
+   * The number of lines at the end of which the subtitle label will be
+   * ellipsized.
+   *
+   * If the value is 0, the number of lines won't be limited.
+   *
+   * Since: 1.3
+   */
+  props[PROP_SUBTITLE_LINES] =
+    g_param_spec_int ("subtitle-lines", NULL, NULL,
+                      0, G_MAXINT,
+                      0,
+                      G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
   g_object_class_install_properties (object_class, LAST_PROP, props);
 
@@ -245,7 +297,7 @@ adw_expander_row_class_init (AdwExpanderRowClass *klass)
                                                "/org/gnome/Adwaita/ui/adw-expander-row.ui");
   gtk_widget_class_bind_template_child_private (widget_class, AdwExpanderRow, action_row);
   gtk_widget_class_bind_template_child_private (widget_class, AdwExpanderRow, box);
-  gtk_widget_class_bind_template_child_private (widget_class, AdwExpanderRow, actions);
+  gtk_widget_class_bind_template_child_private (widget_class, AdwExpanderRow, suffixes);
   gtk_widget_class_bind_template_child_private (widget_class, AdwExpanderRow, list);
   gtk_widget_class_bind_template_child_private (widget_class, AdwExpanderRow, image);
   gtk_widget_class_bind_template_child_private (widget_class, AdwExpanderRow, enable_switch);
@@ -261,6 +313,8 @@ func (gpointer this) { \
 
 NOTIFY (notify_subtitle_cb, PROP_SUBTITLE);
 NOTIFY (notify_icon_name_cb, PROP_ICON_NAME);
+NOTIFY (notify_title_lines_cb, PROP_TITLE_LINES);
+NOTIFY (notify_subtitle_lines_cb, PROP_SUBTITLE_LINES);
 
 static void
 adw_expander_row_init (AdwExpanderRow *self)
@@ -276,6 +330,8 @@ adw_expander_row_init (AdwExpanderRow *self)
 
   g_signal_connect_object (priv->action_row, "notify::subtitle", G_CALLBACK (notify_subtitle_cb), self, G_CONNECT_SWAPPED);
   g_signal_connect_object (priv->action_row, "notify::icon-name", G_CALLBACK (notify_icon_name_cb), self, G_CONNECT_SWAPPED);
+  g_signal_connect_object (priv->action_row, "notify::title-lines", G_CALLBACK (notify_title_lines_cb), self, G_CONNECT_SWAPPED);
+  g_signal_connect_object (priv->action_row, "notify::subtitle-lines", G_CALLBACK (notify_subtitle_lines_cb), self, G_CONNECT_SWAPPED);
 }
 
 static void
@@ -290,7 +346,9 @@ adw_expander_row_buildable_add_child (GtkBuildable *buildable,
   if (!priv->box)
     parent_buildable_iface->add_child (buildable, builder, child, type);
   else if (type && strcmp (type, "action") == 0)
-    adw_expander_row_add_action (self, GTK_WIDGET (child));
+    adw_expander_row_add_suffix (self, GTK_WIDGET (child));
+  else if (type && strcmp (type, "suffix") == 0)
+    adw_expander_row_add_suffix (self, GTK_WIDGET (child));
   else if (type && strcmp (type, "prefix") == 0)
     adw_expander_row_add_prefix (self, GTK_WIDGET (child));
   else if (!type && GTK_IS_WIDGET (child))
@@ -313,8 +371,6 @@ adw_expander_row_buildable_init (GtkBuildableIface *iface)
  * Creates a new `AdwExpanderRow`.
  *
  * Returns: the newly created `AdwExpanderRow`
- *
- * Since: 1.0
  */
 GtkWidget *
 adw_expander_row_new (void)
@@ -329,7 +385,7 @@ adw_expander_row_new (void)
  *
  * Adds an action widget to @self.
  *
- * Since: 1.0
+ * Deprecated: 1.4: Use [method@ExpanderRow.add_suffix] to add a suffix.
  */
 void
 adw_expander_row_add_action (AdwExpanderRow *self,
@@ -339,11 +395,12 @@ adw_expander_row_add_action (AdwExpanderRow *self,
 
   g_return_if_fail (ADW_IS_EXPANDER_ROW (self));
   g_return_if_fail (GTK_IS_WIDGET (self));
+  g_return_if_fail (gtk_widget_get_parent (widget) == NULL);
 
   priv = adw_expander_row_get_instance_private (self);
 
-  gtk_box_prepend (priv->actions, widget);
-  gtk_widget_show (GTK_WIDGET (priv->actions));
+  gtk_box_prepend (priv->suffixes, widget);
+  gtk_widget_set_visible (GTK_WIDGET (priv->suffixes), TRUE);
 }
 
 /**
@@ -352,8 +409,6 @@ adw_expander_row_add_action (AdwExpanderRow *self,
  * @widget: a widget
  *
  * Adds a prefix widget to @self.
- *
- * Since: 1.0
  */
 void
 adw_expander_row_add_prefix (AdwExpanderRow *self,
@@ -363,6 +418,7 @@ adw_expander_row_add_prefix (AdwExpanderRow *self,
 
   g_return_if_fail (ADW_IS_EXPANDER_ROW (self));
   g_return_if_fail (GTK_IS_WIDGET (widget));
+  g_return_if_fail (gtk_widget_get_parent (widget) == NULL);
 
   priv = adw_expander_row_get_instance_private (self);
 
@@ -374,6 +430,31 @@ adw_expander_row_add_prefix (AdwExpanderRow *self,
 }
 
 /**
+ * adw_expander_row_add_suffix:
+ * @self: an expander row
+ * @widget: a widget
+ *
+ * Adds an suffix widget to @self.
+ *
+ * Since: 1.4
+ */
+void
+adw_expander_row_add_suffix (AdwExpanderRow *self,
+                             GtkWidget      *widget)
+{
+  AdwExpanderRowPrivate *priv;
+
+  g_return_if_fail (ADW_IS_EXPANDER_ROW (self));
+  g_return_if_fail (GTK_IS_WIDGET (self));
+  g_return_if_fail (gtk_widget_get_parent (widget) == NULL);
+
+  priv = adw_expander_row_get_instance_private (self);
+
+  gtk_box_prepend (priv->suffixes, widget);
+  gtk_widget_set_visible (GTK_WIDGET (priv->suffixes), TRUE);
+}
+
+/**
  * adw_expander_row_add_row:
  * @self: an expander row
  * @child: a widget
@@ -381,8 +462,6 @@ adw_expander_row_add_prefix (AdwExpanderRow *self,
  * Adds a widget to @self.
  *
  * The widget will appear in the expanding list below @self.
- *
- * Since: 1.0
  */
 void
 adw_expander_row_add_row (AdwExpanderRow *self,
@@ -392,6 +471,7 @@ adw_expander_row_add_row (AdwExpanderRow *self,
 
   g_return_if_fail (ADW_IS_EXPANDER_ROW (self));
   g_return_if_fail (GTK_IS_WIDGET (child));
+  g_return_if_fail (gtk_widget_get_parent (child) == NULL);
 
   priv = adw_expander_row_get_instance_private (self);
 
@@ -404,13 +484,11 @@ adw_expander_row_add_row (AdwExpanderRow *self,
 }
 
 /**
- * adw_action_row_expander:
+ * adw_expander_row_remove:
  * @self: an expander row
- * @widget: the child to be removed
+ * @child: the child to be removed
  *
  * Removes a child from @self.
- *
- * Since: 1.0
  */
 void
 adw_expander_row_remove (AdwExpanderRow *self,
@@ -426,7 +504,7 @@ adw_expander_row_remove (AdwExpanderRow *self,
 
   parent = gtk_widget_get_parent (child);
 
-  if (parent == GTK_WIDGET (priv->prefixes) || parent == GTK_WIDGET (priv->actions)) {
+  if (parent == GTK_WIDGET (priv->prefixes) || parent == GTK_WIDGET (priv->suffixes)) {
     gtk_box_remove (GTK_BOX (parent), child);
     gtk_widget_set_visible (parent, gtk_widget_get_first_child (parent) != NULL);
   }
@@ -443,14 +521,12 @@ adw_expander_row_remove (AdwExpanderRow *self,
 }
 
 /**
- * adw_expander_row_get_subtitle: (attributes org.gtk.Method.get_property=subtitle)
+ * adw_expander_row_get_subtitle:
  * @self: an expander row
  *
  * Gets the subtitle for @self.
  *
  * Returns: the subtitle for @self
- *
- * Since: 1.0
  */
 const char *
 adw_expander_row_get_subtitle (AdwExpanderRow *self)
@@ -465,7 +541,7 @@ adw_expander_row_get_subtitle (AdwExpanderRow *self)
 }
 
 /**
- * adw_expander_row_set_subtitle: (attributes org.gtk.Method.set_property=subtitle)
+ * adw_expander_row_set_subtitle:
  * @self: an expander row
  * @subtitle: the subtitle
  *
@@ -473,8 +549,6 @@ adw_expander_row_get_subtitle (AdwExpanderRow *self)
  *
  * The subtitle is interpreted as Pango markup unless
  * [property@PreferencesRow:use-markup] is set to `FALSE`.
- *
- * Since: 1.0
  */
 void
 adw_expander_row_set_subtitle (AdwExpanderRow *self,
@@ -490,14 +564,14 @@ adw_expander_row_set_subtitle (AdwExpanderRow *self,
 }
 
 /**
- * adw_expander_row_get_icon_name: (attributes org.gtk.Method.get_property=icon-name)
+ * adw_expander_row_get_icon_name:
  * @self: an expander row
  *
  * Gets the icon name for @self.
  *
  * Returns: (nullable): the icon name for @self
  *
- * Since: 1.0
+ * Deprecated: 1.3: Use [method@ExpanderRow.add_prefix] to add an icon.
  */
 const char *
 adw_expander_row_get_icon_name (AdwExpanderRow *self)
@@ -512,13 +586,13 @@ adw_expander_row_get_icon_name (AdwExpanderRow *self)
 }
 
 /**
- * adw_expander_row_set_icon_name: (attributes org.gtk.Method.set_property=icon-name)
+ * adw_expander_row_set_icon_name:
  * @self: an expander row
  * @icon_name: (nullable): the icon name
  *
  * Sets the icon name for @self.
  *
- * Since: 1.0
+ * Deprecated: 1.3: Use [method@ExpanderRow.add_prefix] to add an icon.
  */
 void
 adw_expander_row_set_icon_name (AdwExpanderRow *self,
@@ -534,14 +608,12 @@ adw_expander_row_set_icon_name (AdwExpanderRow *self,
 }
 
 /**
- * adw_expander_row_get_expanded: (attributes org.gtk.Method.get_property=expanded)
+ * adw_expander_row_get_expanded:
  * @self: an expander row
  *
  * Gets whether @self is expanded.
  *
  * Returns: whether @self is expanded
- *
- * Since: 1.0
  */
 gboolean
 adw_expander_row_get_expanded (AdwExpanderRow *self)
@@ -556,13 +628,11 @@ adw_expander_row_get_expanded (AdwExpanderRow *self)
 }
 
 /**
- * adw_expander_row_set_expanded: (attributes org.gtk.Method.set_property=expanded)
+ * adw_expander_row_set_expanded:
  * @self: an expander row
  * @expanded: whether to expand the row
  *
  * Sets whether @self is expanded.
- *
- * Since: 1.0
  */
 void
 adw_expander_row_set_expanded (AdwExpanderRow *self,
@@ -586,18 +656,20 @@ adw_expander_row_set_expanded (AdwExpanderRow *self,
   else
     gtk_widget_unset_state_flags (GTK_WIDGET (self), GTK_STATE_FLAG_CHECKED);
 
+  gtk_accessible_update_state (GTK_ACCESSIBLE (priv->action_row),
+                               GTK_ACCESSIBLE_STATE_EXPANDED, priv->expanded,
+                               -1);
+
   g_object_notify_by_pspec (G_OBJECT (self), props[PROP_EXPANDED]);
 }
 
 /**
- * adw_expander_row_get_enable_expansion: (attributes org.gtk.Method.get_property=enable-expansion)
+ * adw_expander_row_get_enable_expansion:
  * @self: an expander row
  *
  * Gets whether the expansion of @self is enabled.
  *
  * Returns: whether the expansion of @self is enabled.
- *
- * Since: 1.0
  */
 gboolean
 adw_expander_row_get_enable_expansion (AdwExpanderRow *self)
@@ -612,13 +684,11 @@ adw_expander_row_get_enable_expansion (AdwExpanderRow *self)
 }
 
 /**
- * adw_expander_row_set_enable_expansion: (attributes org.gtk.Method.set_property=enable-expansion)
+ * adw_expander_row_set_enable_expansion:
  * @self: an expander row
  * @enable_expansion: whether to enable the expansion
  *
  * Sets whether the expansion of @self is enabled.
- *
- * Since: 1.0
  */
 void
 adw_expander_row_set_enable_expansion (AdwExpanderRow *self,
@@ -643,14 +713,12 @@ adw_expander_row_set_enable_expansion (AdwExpanderRow *self,
 }
 
 /**
- * adw_expander_row_get_show_enable_switch: (attributes org.gtk.Method.get_property=show-enable-switch)
+ * adw_expander_row_get_show_enable_switch:
  * @self: an expander row
  *
  * Gets whether the switch enabling the expansion of @self is visible.
  *
  * Returns: whether the switch enabling the expansion is visible
- *
- * Since: 1.0
  */
 gboolean
 adw_expander_row_get_show_enable_switch (AdwExpanderRow *self)
@@ -665,13 +733,11 @@ adw_expander_row_get_show_enable_switch (AdwExpanderRow *self)
 }
 
 /**
- * adw_expander_row_set_show_enable_switch: (attributes org.gtk.Method.set_property=show-enable-switch)
+ * adw_expander_row_set_show_enable_switch:
  * @self: an expander row
  * @show_enable_switch: whether to show the switch enabling the expansion
  *
  * Sets whether the switch enabling the expansion of @self is visible.
- *
- * Since: 1.0
  */
 void
 adw_expander_row_set_show_enable_switch (AdwExpanderRow *self,
@@ -691,4 +757,102 @@ adw_expander_row_set_show_enable_switch (AdwExpanderRow *self,
   priv->show_enable_switch = show_enable_switch;
 
   g_object_notify_by_pspec (G_OBJECT (self), props[PROP_SHOW_ENABLE_SWITCH]);
+}
+
+/**
+ * adw_expander_row_get_title_lines:
+ * @self: an expander row
+ *
+ * Gets the number of lines at the end of which the title label will be
+ * ellipsized.
+ *
+ * Returns: the number of lines at the end of which the title label will be
+ *   ellipsized
+ *
+ * Since: 1.3
+ */
+int
+adw_expander_row_get_title_lines (AdwExpanderRow *self)
+{
+  AdwExpanderRowPrivate *priv;
+
+  g_return_val_if_fail (ADW_IS_EXPANDER_ROW (self), 0);
+
+  priv = adw_expander_row_get_instance_private (self);
+
+  return adw_action_row_get_title_lines (priv->action_row);
+}
+
+/**
+ * adw_expander_row_set_title_lines:
+ * @self: an expander row
+ * @title_lines: the number of lines at the end of which the title label will be ellipsized
+ *
+ * Sets the number of lines at the end of which the title label will be
+ * ellipsized.
+ *
+ * If the value is 0, the number of lines won't be limited.
+ *
+ * Since: 1.3
+ */
+void
+adw_expander_row_set_title_lines (AdwExpanderRow *self,
+                                  int             title_lines)
+{
+  AdwExpanderRowPrivate *priv;
+
+  g_return_if_fail (ADW_IS_EXPANDER_ROW (self));
+
+  priv = adw_expander_row_get_instance_private (self);
+
+  adw_action_row_set_title_lines (priv->action_row, title_lines);
+}
+
+/**
+ * adw_expander_row_get_subtitle_lines:
+ * @self: an expander row
+ *
+ * Gets the number of lines at the end of which the subtitle label will be
+ * ellipsized.
+ *
+ * Returns: the number of lines at the end of which the subtitle label will be
+ *   ellipsized
+ *
+ * Since: 1.3
+ */
+int
+adw_expander_row_get_subtitle_lines (AdwExpanderRow *self)
+{
+  AdwExpanderRowPrivate *priv;
+
+  g_return_val_if_fail (ADW_IS_EXPANDER_ROW (self), 0);
+
+  priv = adw_expander_row_get_instance_private (self);
+
+  return adw_action_row_get_subtitle_lines (priv->action_row);
+}
+
+/**
+ * adw_expander_row_set_subtitle_lines:
+ * @self: an expander row
+ * @subtitle_lines: the number of lines at the end of which the subtitle label will be ellipsized
+ *
+ * Sets the number of lines at the end of which the subtitle label will be
+ * ellipsized.
+ *
+ * If the value is 0, the number of lines won't be limited.
+ *
+ * Since: 1.3
+ */
+void
+adw_expander_row_set_subtitle_lines (AdwExpanderRow *self,
+                                     int             subtitle_lines)
+{
+  AdwExpanderRowPrivate *priv;
+
+  g_return_if_fail (ADW_IS_EXPANDER_ROW (self));
+
+  priv = adw_expander_row_get_instance_private (self);
+
+  adw_action_row_set_subtitle_lines (priv->action_row, subtitle_lines);
 }
