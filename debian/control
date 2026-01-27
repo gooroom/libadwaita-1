@@ -1,7 +1,8 @@
 Source: libadwaita-1
 Section: libs
 Priority: optional
-Maintainer: Debian GNOME Maintainers <pkg-gnome-maintainers@lists.alioth.debian.org>
+Maintainer: Gooroom <gooroom@gooroom.kr>
+XSBC-Original-Maintainer: Debian GNOME Maintainers <pkg-gnome-maintainers@lists.alioth.debian.org>
 Uploaders: Guido Günther <agx@sigxcpu.org>, Jeremy Bícha <jbicha@ubuntu.com>, Marco Trevisan (Treviño) <marco@ubuntu.com>
 Build-Depends: debhelper-compat (= 13),
                dh-sequence-gir,
@@ -23,10 +24,10 @@ Build-Depends: debhelper-compat (= 13),
                xauth <!nocheck>,
                xvfb <!nocheck>
 Build-Depends-Indep: gi-docgen <!nodoc>
-Standards-Version: 4.7.0
+Standards-Version: 4.6.2
 Homepage: https://gnome.pages.gitlab.gnome.org/libadwaita/
-Vcs-Browser: https://salsa.debian.org/gnome-team/libadwaita
-Vcs-Git: https://salsa.debian.org/gnome-team/libadwaita.git
+Vcs-Browser: https://github.com/gooroom/libadwaita-1
+Vcs-Git: https://github.com/gooroom/libadwaita-1.git
 Rules-Requires-Root: no
 
 Package: libadwaita-1-0

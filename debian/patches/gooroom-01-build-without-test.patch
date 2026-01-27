@@ -3,8 +3,6 @@ Description: Disable test build for Gooroom
 Author: Gooroom Team <gooroom@gooroom.kr>
 Forwarded: not-needed
 
-diff --git a/meson.build b/meson.build
-index 1234567..abcdefg 100644
 --- a/meson.build
 +++ b/meson.build
 @@ -144,7 +144,7 @@ subdir('src')
@@ -14,12 +12,12 @@ index 1234567..abcdefg 100644
 -subdir('tests')
 +#subdir('tests')
  subdir('doc')
-
+ 
  run_data = configuration_data()
 @@ -155,9 +155,9 @@ configure_file(
           output: 'run',
    configuration: run_data)
-
+ 
 +#    'Tests': get_option('tests'),
  summary(
    {

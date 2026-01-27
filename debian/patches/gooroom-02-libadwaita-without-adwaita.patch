@@ -7,7 +7,7 @@ Forwarded: not-needed
 
 --- a/src/adw-style-manager.c
 +++ b/src/adw-style-manager.c
-@@ -432,6 +432,22 @@
+@@ -432,6 +432,22 @@ notify_high_contrast_cb (AdwStyleManager *self)
  }
  
  static void
@@ -30,7 +30,7 @@ Forwarded: not-needed
  adw_style_manager_constructed (GObject *object)
  {
    AdwStyleManager *self = ADW_STYLE_MANAGER (object);
-@@ -457,29 +473,18 @@
+@@ -457,24 +473,18 @@ adw_style_manager_constructed (GObject *object)
                               G_CONNECT_SWAPPED);
  
      if (!adw_is_granite_present () && !g_getenv ("GTK_THEME")) {
@@ -52,11 +52,6 @@ Forwarded: not-needed
 -      gtk_style_context_add_provider_for_display (self->display,
 -                                                  GTK_STYLE_PROVIDER (self->accent_provider),
 -                                                  GTK_STYLE_PROVIDER_PRIORITY_THEME);
--
--      self->fonts_provider = gtk_css_provider_new ();
--      gtk_style_context_add_provider_for_display (self->display,
--                                                  GTK_STYLE_PROVIDER (self->fonts_provider),
--                                                  GTK_STYLE_PROVIDER_PRIORITY_THEME);
 +      /* Gooroom: Use GTK theme from GSettings instead of forcing Adwaita-empty */
 +      GSettingsSchemaSource *schema_source = g_settings_schema_source_get_default ();
 +      GSettingsSchema *schema = g_settings_schema_source_lookup (schema_source,
@@ -69,6 +64,6 @@ Forwarded: not-needed
 +                          G_CALLBACK (adw_style_manager_theme_changed), self->display);
 +        g_settings_schema_unref (schema);
 +      }
-     }
  
-     self->animations_provider = gtk_css_provider_new ();
+       self->fonts_provider = gtk_css_provider_new ();
+       gtk_style_context_add_provider_for_display (self->display,
